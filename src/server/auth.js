@@ -39,7 +39,8 @@ function setSessionCookie(res, user) {
   };
   res.cookie(config.SESSION_COOKIE, signSession(payload), {
     httpOnly: true,
-    secure:   true,
+    // false for local HTTP (the MVP default). Set COOKIE_SECURE=true behind HTTPS.
+    secure:   config.COOKIE_SECURE,
     sameSite: "lax",
     maxAge:   config.SESSION_TTL_MS,
   });

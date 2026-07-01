@@ -85,6 +85,33 @@ geofencing, offline queue.
 
 ---
 
+## Run the MVP (connected to nothing — zero config)
+
+This MVP runs entirely **in memory**: no Telegram, no Google Sheets, no env vars.
+Data is seeded on boot and resets on restart — perfect for trying the platform.
+
+```bash
+npm install
+npm start
+# → open http://localhost:3000  (login password: admin)
+```
+
+That's it. Add/edit/delete points & workers, import an Excel/CSV, browse the seeded
+visits and map — all against the in-memory store.
+
+### Connecting real data later (not needed now)
+
+The datasource is behind a seam (`src/server/datasource/`), so switching stores is a
+one-line change — nothing in the routes or the bot changes:
+
+| Env var            | Purpose                                                        |
+|--------------------|----------------------------------------------------------------|
+| `DATASOURCE`       | `memory` (default) → `sheets` to persist in Google Sheets      |
+| `PLATFORM_PASSWORD`| Web login password (default `admin` — **change in production**)|
+| `COOKIE_SECURE`    | `true` when deployed behind HTTPS (e.g. Railway)               |
+| `TELEGRAM_TOKEN`   | Enables the worker check-in bot (`npm run bot`)                |
+| `GOOGLE_CREDENTIALS` / `SHEET_ID` | Needed only when `DATASOURCE=sheets`            |
+
 ## Setup (separate everything — holodBot untouched)
 
 - Its own folder: `starx/`

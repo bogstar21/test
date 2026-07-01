@@ -18,9 +18,13 @@ const TENANTS = [
   {
     id:       "default",
     name:     process.env.TENANT_NAME || "StarX Demo",
-    source:   "sheets",
+    // MVP: data lives in memory (no Google, no credentials). Switch to "sheets"
+    // and set SHEET_ID/GOOGLE_CREDENTIALS when you want real persistence.
+    source:   process.env.DATASOURCE || "memory",
     sheetId:  process.env.SHEET_ID || "",
-    password: process.env.PLATFORM_PASSWORD || "",
+    // Default password so the platform runs with zero config. CHANGE THIS in any
+    // real deployment via the PLATFORM_PASSWORD env var.
+    password: process.env.PLATFORM_PASSWORD || "admin",
   },
   // Example second tenant — uncomment and set env to enable:
   // {
@@ -60,9 +64,13 @@ function isTrustedIp(req) {
 
 const PLATFORM_PASSWORD = process.env.PLATFORM_PASSWORD || "";
 
+// Secure cookies require HTTPS. Off by default so the MVP works on http://localhost;
+// set COOKIE_SECURE=true when deploying behind HTTPS (e.g. Railway).
+const COOKIE_SECURE = process.env.COOKIE_SECURE === "true";
+
 module.exports = {
   ROOT_DIR, PUBLIC_DIR, PORT, PLATFORM_URL,
   getTenant, defaultTenant, TENANTS,
   SESSION_SECRET, SESSION_COOKIE, SESSION_TTL_MS, SESSION_TTL_DAYS, PLATFORM_PASSWORD,
-  TRUSTED_IPS, isTrustedIp,
+  TRUSTED_IPS, isTrustedIp, COOKIE_SECURE,
 };

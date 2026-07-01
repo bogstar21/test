@@ -4,8 +4,8 @@
   "description": "StarX — logistics check-in platform (GPS + photos). Telegram bot + web platform + Google Sheets.",
   "main": "bot.js",
   "scripts": {
-    "start": "node bot.js",
-    "server": "node src/server/index.js"
+    "start": "node src/server/index.js",
+    "bot": "node bot.js"
   },
   "license": "ISC",
   "type": "commonjs",
