@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>StarX — Sign in</title>
+  <link rel="icon" href="/platform/assets/icon.svg">
+  <style>
+    :root { color-scheme: dark; }
+    * { box-sizing: border-box; }
+    body { margin:0; min-height:100vh; display:flex; align-items:center; justify-content:center;
+      font-family: system-ui, "Segoe UI", Roboto, sans-serif; background:#000; color:#ededed; padding:20px; }
+    .box { width:100%; max-width:380px; background:#0a0a0a; border:1px solid rgba(255,255,255,.1);
+      border-radius:16px; padding:32px; }
+    .brand { font-size:28px; font-weight:700; margin:0 0 4px; }
+    .sub { color:#9aa0a6; margin:0 0 24px; font-size:14px; }
+    label { display:block; font-size:13px; color:#9aa0a6; margin:0 0 6px; }
+    input { width:100%; padding:12px 14px; border-radius:10px; border:1px solid rgba(255,255,255,.14);
+      background:#161616; color:#fff; font-size:15px; }
+    button { width:100%; margin-top:16px; padding:12px; border:0; border-radius:10px; cursor:pointer;
+      background:#fff; color:#000; font-weight:600; font-size:15px; }
+    .err { background:rgba(255,80,80,.12); border:1px solid rgba(255,80,80,.4); color:#ff9b9b;
+      padding:10px 12px; border-radius:10px; font-size:13px; margin-bottom:16px; }
+  </style>
+</head>
+<body>
+  <form class="box" method="POST" action="/auth/login" id="form">
+    <h1 class="brand">⭐ StarX</h1>
+    <p class="sub">Logistics check-in platform</p>
+    <div class="err" id="err" style="display:none">Wrong password. Try again.</div>
+    <label for="password">Password</label>
+    <input type="password" id="password" name="password" autocomplete="current-password" autofocus required>
+    <button type="submit">Sign in</button>
+  </form>
+  <script>
+    var p = new URLSearchParams(location.search);
+    if (p.get("e")) document.getElementById("err").style.display = "block";
+    var next = p.get("next");
+    if (next) document.getElementById("form").action = "/auth/login?next=" + encodeURIComponent(next);
+  </script>
+</body>
+</html>

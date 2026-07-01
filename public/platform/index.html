@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>StarX — Platform</title>
+  <link rel="icon" href="/platform/assets/icon.svg">
+  <link rel="manifest" href="/platform/manifest.webmanifest">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <link rel="stylesheet" href="/platform/assets/app.css?v=1">
+</head>
+<body>
+  <header class="top">
+    <span class="brand">⭐ StarX</span>
+    <span class="spacer"></span>
+    <span class="company" id="company">…</span>
+    <a class="btn ghost sm" href="/auth/logout">Logout</a>
+  </header>
+
+  <nav class="tabs">
+    <button class="tab active" data-view="dashboard">Dashboard</button>
+    <button class="tab" data-view="points">Points</button>
+    <button class="tab" data-view="workers">Workers</button>
+    <button class="tab" data-view="visits">Visits</button>
+    <button class="tab" data-view="import">Import &amp; Setup</button>
+  </nav>
+
+  <main>
+    <!-- Dashboard -->
+    <section class="view" id="view-dashboard">
+      <div class="cards">
+        <div class="card stat"><div class="num" id="s-visits">–</div><div class="lbl">Total check-ins</div></div>
+        <div class="card stat"><div class="num" id="s-today">–</div><div class="lbl">Today</div></div>
+        <div class="card stat"><div class="num" id="s-points">–</div><div class="lbl">Active points</div></div>
+        <div class="card stat"><div class="num" id="s-workers">–</div><div class="lbl">Active workers</div></div>
+      </div>
+      <div class="card">
+        <h3>Recent check-ins map</h3>
+        <div id="map"></div>
+      </div>
+      <div class="grid2">
+        <div class="card"><h3>Top workers</h3><div id="top-workers"><div class="empty">No data yet</div></div></div>
+        <div class="card"><h3>Top points</h3><div id="top-points"><div class="empty">No data yet</div></div></div>
+      </div>
+    </section>
+
+    <!-- Points -->
+    <section class="view hidden" id="view-points">
+      <div class="bar"><h2>Points</h2><span class="spacer"></span><button class="btn admin-only" id="add-point">+ Add point</button></div>
+      <div class="card"><div id="points-wrap"><div class="empty">Loading…</div></div></div>
+    </section>
+
+    <!-- Workers -->
+    <section class="view hidden" id="view-workers">
+      <div class="bar"><h2>Workers</h2><span class="spacer"></span><button class="btn admin-only" id="add-worker">+ Add worker</button></div>
+      <div class="card"><div id="workers-wrap"><div class="empty">Loading…</div></div></div>
+    </section>
+
+    <!-- Visits -->
+    <section class="view hidden" id="view-visits">
+      <div class="bar"><h2>Visits</h2><span class="spacer"></span><button class="btn ghost sm" id="reload-visits">Refresh</button></div>
+      <div class="card"><div id="visits-wrap"><div class="empty">Loading…</div></div></div>
+    </section>
+
+    <!-- Import & Setup -->
+    <section class="view hidden" id="view-import">
+      <div class="bar"><h2>Import &amp; Setup</h2></div>
+
+      <div class="card">
+        <h3>Onboard a Google Sheet</h3>
+        <p class="muted" style="margin-top:0">Create the <code>workers</code>, <code>points</code> and <code>visits</code> tabs (with headers) in your connected sheet. Safe to run again — it never deletes data.</p>
+        <button class="btn ghost admin-only" id="setup-btn">Set up sheet</button>
+      </div>
+
+      <div class="card">
+        <h3>Import from Excel / CSV</h3>
+        <div class="field">
+          <label>What are you importing?</label>
+          <select id="imp-target"><option value="points">Points (stops to visit)</option><option value="workers">Workers (field staff)</option></select>
+        </div>
+        <div class="field">
+          <label>Choose a file (.xlsx, .xls, .csv)</label>
+          <input type="file" id="imp-file" accept=".xlsx,.xls,.csv">
+        </div>
+        <div id="imp-map"></div>
+        <button class="btn admin-only hidden" id="imp-run">Import rows</button>
+      </div>
+    </section>
+  </main>
+
+  <!-- Modal (add/edit) -->
+  <div class="modal hidden" id="modal">
+    <div class="sheet">
+      <h3 id="modal-title">Edit</h3>
+      <div id="modal-body"></div>
+      <div class="actions">
+        <button class="btn ghost" id="modal-cancel">Cancel</button>
+        <button class="btn" id="modal-save">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="/platform/assets/app.js?v=1"></script>
+</body>
+</html>
