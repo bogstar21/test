@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0a0a0a" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <title>StarX Connect — Client Portal</title>
+  <link rel="stylesheet" href="assets/style.css?v=1" />
+  <script>
+    // Apply saved theme before first paint (default light, like the source platform's statistics page).
+    (function () { try { if (localStorage.getItem('starx-theme') === 'dark') document.documentElement.classList.add('dark'); } catch (e) {} })();
+  </script>
+</head>
+<body>
+  <!-- icon sprite (Feather-style line icons, same set as the ODX platform) -->
+  <svg class="sprite" aria-hidden="true">
+    <symbol id="i-home" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V20a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V9.5"/><path d="M9.5 21v-6h5v6"/></symbol>
+    <symbol id="i-chart" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="m7 14 3-3 3 3 5-6"/></symbol>
+    <symbol id="i-plug" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22v-5"/><path d="M9 8V2"/><path d="M15 8V2"/><path d="M6 8h12v4a6 6 0 0 1-12 0V8Z"/></symbol>
+    <symbol id="i-tools" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></symbol>
+    <symbol id="i-import" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/></symbol>
+    <symbol id="i-users" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></symbol>
+    <symbol id="i-pin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></symbol>
+    <symbol id="i-clock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
+    <symbol id="i-zap" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 4 14h7l-1 8 9-12h-7l1-8Z"/></symbol>
+    <symbol id="i-server" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="7" rx="2"/><rect x="3" y="13" width="18" height="7" rx="2"/><path d="M7 7.5h.01"/><path d="M7 16.5h.01"/></symbol>
+    <symbol id="i-sheet" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2.5"/><path d="M3 9h18"/><path d="M3 15h18"/><path d="M9 3v18"/></symbol>
+    <symbol id="i-key" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="7.5" cy="15.5" r="4.5"/><path d="m11 12 9-9"/><path d="m17.5 5.5 3 3"/><path d="m14.5 8.5 3 3"/></symbol>
+    <symbol id="i-copy" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></symbol>
+    <symbol id="i-send" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></symbol>
+    <symbol id="i-globe" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3a15 15 0 0 1 0 18 15 15 0 0 1 0-18Z"/></symbol>
+    <symbol id="i-file" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/></symbol>
+    <symbol id="i-menu" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></symbol>
+    <symbol id="i-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></symbol>
+    <symbol id="i-refresh" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></symbol>
+    <symbol id="i-ext" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17 17 7"/><path d="M8 7h9v9"/></symbol>
+  </svg>
+
+  <header class="topbar">
+    <div class="top-left">
+      <button class="btn btn-ghost btn-sm btn-icon" id="nav-toggle" type="button" aria-label="Open menu"><svg class="ic"><use href="#i-menu"/></svg></button>
+      <a class="brand-row" href="#/dashboard">
+        <span class="mark"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 0c.7 6.3 5.4 11 11.7 11.7C17.4 12.4 12.7 17 12 23.3 11.3 17 6.6 12.4.3 11.7 6.6 11 11.3 6.3 12 0Z"/></svg></span>
+        <span class="brand">StarX</span>
+        <span class="meta">Client portal · Acme Logistics S.L.</span>
+      </a>
+    </div>
+    <div class="top-right">
+      <span class="badge ok"><span class="dot dot-ok"></span> Data source connected</span>
+      <span class="user">maria@acmelogistics.com</span>
+      <button class="btn btn-ghost btn-sm btn-icon" id="theme-toggle" type="button" aria-label="Toggle theme"><span id="theme-icon" style="font-size:15px;line-height:1">🌙</span></button>
+      <a class="btn btn-ghost btn-sm" href="#">Log out</a>
+    </div>
+  </header>
+
+  <div class="layout">
+    <nav class="side" id="side-nav">
+      <div class="side-head">
+        <div class="nav-label">Menu</div>
+        <button class="btn btn-ghost btn-sm btn-icon" id="nav-close" type="button" aria-label="Close menu"><svg class="ic"><use href="#i-x"/></svg></button>
+      </div>
+      <div class="nav-label">Platform</div>
+      <a class="nav" data-view="dashboard" href="#/dashboard"><svg class="ic"><use href="#i-home"/></svg> Dashboard</a>
+      <a class="nav" data-view="integration" href="#/integration"><svg class="ic"><use href="#i-plug"/></svg> Data integration</a>
+      <a class="nav" data-view="tools" href="#/tools"><svg class="ic"><use href="#i-tools"/></svg> Tools &amp; deployment</a>
+      <div class="side-foot">StarX Connect · MVP mockup<br>All data shown is sample data.</div>
+    </nav>
+
+    <main class="main">
+
+      <!-- ══════════════════ 1 · DASHBOARD ══════════════════ -->
+      <section class="view" id="view-dashboard">
+        <div class="view-head">
+          <div>
+            <h1 class="h1">Dashboard</h1>
+            <p class="lead">Field activity across your routes — who went where, when, with proof.</p>
+          </div>
+          <div class="tabs" id="range-tabs">
+            <button class="tab" data-range="7">7 days</button>
+            <button class="tab active" data-range="14">14 days</button>
+            <button class="tab" data-range="30">30 days</button>
+          </div>
+        </div>
+
+        <div class="grid grid-4">
+          <div class="card kpi"><div class="lbl"><svg class="ic"><use href="#i-check"/></svg> Total check-ins</div><div class="num" id="k-total">1,284</div><div class="sub"><span class="up">▲ 12%</span> vs previous period</div></div>
+          <div class="card kpi"><div class="lbl"><svg class="ic"><use href="#i-clock"/></svg> Check-ins today</div><div class="num" id="k-today">47</div><div class="sub">last at 17:42</div></div>
+          <div class="card kpi"><div class="lbl"><svg class="ic"><use href="#i-pin"/></svg> Active points</div><div class="num">86</div><div class="sub">3 added this week</div></div>
+          <div class="card kpi"><div class="lbl"><svg class="ic"><use href="#i-users"/></svg> Active workers</div><div class="num">12</div><div class="sub">9 on route right now</div></div>
+        </div>
+
+        <div class="grid grid-2 mt">
+          <div class="card chart-card" style="grid-column: 1 / -1;">
+            <p class="ct"><svg class="ic"><use href="#i-chart"/></svg> Visits per day</p>
+            <div class="chart" id="chart-visits"></div>
+          </div>
+        </div>
+
+        <div class="grid grid-2 mt">
+          <div class="card chart-card">
+            <p class="ct"><svg class="ic"><use href="#i-users"/></svg> Top workers</p>
+            <div class="barlist" id="bl-workers"></div>
+          </div>
+          <div class="card chart-card">
+            <p class="ct"><svg class="ic"><use href="#i-pin"/></svg> Most visited points</p>
+            <div class="barlist" id="bl-points"></div>
+          </div>
+        </div>
+
+        <div class="section-title">Latest check-ins</div>
+        <div class="table-wrap stack-wrap">
+          <table class="table stack">
+            <thead><tr><th>Time</th><th>Worker</th><th>Point</th><th>GPS</th><th>Photos</th><th>Status</th></tr></thead>
+            <tbody id="visits-body"></tbody>
+          </table>
+        </div>
+
+        <div class="section-title">System status</div>
+        <div class="grid grid-3">
+          <div class="card stile"><div class="row"><svg class="ic"><use href="#i-sheet"/></svg> Data source</div><div class="val"><span class="dot dot-ok"></span> Google Sheet · synced 2 min ago</div></div>
+          <div class="card stile"><div class="row"><svg class="ic"><use href="#i-send"/></svg> Telegram bot</div><div class="val"><span class="dot dot-ok"></span> @AcmeRoutesBot · online</div></div>
+          <div class="card stile"><div class="row"><svg class="ic"><use href="#i-globe"/></svg> Web app</div><div class="val"><span class="dot dot-muted"></span> Not deployed yet</div></div>
+        </div>
+      </section>
+
+      <!-- ══════════════════ 2 · DATA INTEGRATION ══════════════════ -->
+      <section class="view" id="view-integration">
+        <div class="view-head">
+          <div>
+            <h1 class="h1">Data integration</h1>
+            <p class="lead">Bring your own data — points and workers in, visits out. Connect through our REST API or import spreadsheets manually.</p>
+          </div>
+        </div>
+
+        <div class="grid grid-2">
+          <!-- Connect via API -->
+          <div class="card card-pad">
+            <h3><svg class="ic"><use href="#i-server"/></svg> Connect via API</h3>
+            <p class="desc">Point your system at our REST endpoints. We read your points &amp; workers and push every visit back to you in real time.</p>
+
+            <div class="field">
+              <span class="flabel">Your API base URL</span>
+              <input class="input mono" id="api-base" placeholder="https://api.yourcompany.com/v1" value="https://api.acmelogistics.com/v1" />
+            </div>
+
+            <div class="field mt">
+              <span class="flabel">Endpoints we will use</span>
+              <div class="endpoints">
+                <div class="ep-row"><span class="ep-method get">GET</span><span class="ep-path">/points</span><span class="ep-desc">stops to visit</span></div>
+                <div class="ep-row"><span class="ep-method get">GET</span><span class="ep-path">/workers</span><span class="ep-desc">field staff</span></div>
+                <div class="ep-row"><span class="ep-method post">POST</span><span class="ep-path">/visits</span><span class="ep-desc">check-ins with GPS + photos</span></div>
+              </div>
+            </div>
+
+            <div class="field mt">
+              <span class="flabel">API key</span>
+              <div class="keybox">
+                <svg class="ic" style="color:var(--faint)"><use href="#i-key"/></svg>
+                <span class="kv empty" id="api-key">No key generated yet</span>
+                <button class="btn btn-ghost btn-sm btn-icon hidden" id="copy-key" type="button" title="Copy"><svg class="ic"><use href="#i-copy"/></svg></button>
+              </div>
+              <span class="fhint">The key authenticates our calls to your API. Rotate it any time.</span>
+            </div>
+
+            <div class="deploy-foot">
+              <button class="btn btn-ghost" id="gen-key" type="button"><svg class="ic"><use href="#i-key"/></svg> Generate API key</button>
+              <button class="btn btn-primary" id="test-conn" type="button"><svg class="ic"><use href="#i-zap"/></svg> Test connection</button>
+            </div>
+            <div class="success-panel mt hidden" id="api-success">
+              <span class="sp-ic"><svg class="ic"><use href="#i-check"/></svg></span>
+              <div><div class="sp-t">Connection verified</div><div class="sp-d">Reached <span class="mono" id="api-success-url">…</span> — found <b>86 points</b> and <b>12 workers</b>. Visits will be pushed to <span class="mono">POST /visits</span>.</div></div>
+            </div>
+          </div>
+
+          <!-- Manual Excel import -->
+          <div class="card card-pad">
+            <h3><svg class="ic"><use href="#i-import"/></svg> Manual Excel import</h3>
+            <p class="desc">No API? Upload an <b>.xlsx / .csv</b> with your points or workers and we load it into your workspace.</p>
+
+            <div class="field">
+              <span class="flabel">What are you importing?</span>
+              <select class="input select" id="imp-target">
+                <option>Points (stops to visit)</option>
+                <option>Workers (field staff)</option>
+              </select>
+            </div>
+
+            <div class="dropzone mt" id="dropzone" tabindex="0" role="button" aria-label="Upload file">
+              <span class="dz-ic"><svg class="ic"><use href="#i-import"/></svg></span>
+              <span class="dz-t" id="dz-title">Drag &amp; drop your file here</span>
+              <span class="dz-d" id="dz-desc">or click to browse · .xlsx, .xls, .csv up to 10 MB</span>
+            </div>
+
+            <div class="mt hidden" id="imp-preview">
+              <div class="field"><span class="flabel">Preview — first 3 of 86 rows</span></div>
+              <div class="table-wrap stack-wrap">
+                <table class="table stack">
+                  <thead><tr><th>name</th><th>address</th><th>lat</th><th>lng</th></tr></thead>
+                  <tbody>
+                    <tr><td data-label="name">Mercado Central</td><td data-label="address">Av. de la Constitución 12, Sevilla</td><td class="mono" data-label="lat">37.3891</td><td class="mono" data-label="lng">-5.9845</td></tr>
+                    <tr><td data-label="name">Bar La Plaza</td><td data-label="address">Plaza Mayor 3, Madrid</td><td class="mono" data-label="lat">40.4155</td><td class="mono" data-label="lng">-3.7074</td></tr>
+                    <tr><td data-label="name">Kiosko Ronda</td><td data-label="address">Ronda Litoral 44, Barcelona</td><td class="mono" data-label="lat">41.3809</td><td class="mono" data-label="lng">2.1896</td></tr>
+                  </tbody>
+                </table>
+              </div>
+              <div class="progress mt hidden" id="imp-progress"><div class="p-fill" id="imp-fill"></div></div>
+              <div class="deploy-foot">
+                <button class="btn btn-primary" id="imp-run" type="button"><svg class="ic"><use href="#i-zap"/></svg> Process data</button>
+                <button class="btn btn-ghost" id="imp-clear" type="button">Remove file</button>
+              </div>
+            </div>
+
+            <div class="success-panel mt hidden" id="imp-success">
+              <span class="sp-ic"><svg class="ic"><use href="#i-check"/></svg></span>
+              <div><div class="sp-t">Import complete</div><div class="sp-d"><b>86 rows imported</b>, 0 skipped · <span class="mono" id="imp-success-file">points.xlsx</span>. Your workers will see the new stops on their next route.</div></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="section-title">How it works</div>
+        <div class="card card-pad">
+          <div class="steps">
+            <div class="step"><span class="sn">1</span><div class="sb"><div class="st">Connect your data</div><div class="sd">API, Google Sheets or a one-off Excel import — points and workers land in your workspace.</div></div></div>
+            <div class="step"><span class="sn">2</span><div class="sb"><div class="st">Deploy a check-in tool</div><div class="sd">A Telegram bot or a branded web app for your field workers (see Tools &amp; deployment).</div></div></div>
+            <div class="step"><span class="sn">3</span><div class="sb"><div class="st">Watch visits flow in</div><div class="sd">Every check-in — GPS, photos, timestamp — appears on the dashboard and is pushed back to your systems.</div></div></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ══════════════════ 3 · TOOLS & DEPLOYMENT ══════════════════ -->
+      <section class="view" id="view-tools">
+        <div class="view-head">
+          <div>
+            <h1 class="h1">Tools &amp; deployment</h1>
+            <p class="lead">Choose how your field workers check in: a Telegram bot, a branded web app, or both. Configure and deploy in one click.</p>
+          </div>
+        </div>
+
+        <div class="grid grid-2">
+          <!-- Option A: Telegram bot -->
+          <div class="card card-pad">
+            <div class="deploy-head">
+              <span class="dh-ic"><svg class="ic"><use href="#i-send"/></svg></span>
+              <div>
+                <div class="dh-t">Option A — Telegram bot</div>
+                <div class="dh-d">Workers check in from the chat they already use. Zero install.</div>
+              </div>
+            </div>
+
+            <div class="form-grid">
+              <div class="field"><span class="flabel">Bot display name</span><input class="input" id="bot-name" value="Acme Routes" /></div>
+              <div class="field"><span class="flabel">Bot username</span><input class="input mono" id="bot-user" value="@AcmeRoutesBot" /></div>
+              <div class="field span-2"><span class="flabel">Bot token (from @BotFather)</span><input class="input mono" id="bot-token" type="password" value="7213984412:AAF-demo-token-not-real" /></div>
+              <div class="field span-2"><span class="flabel">Welcome message</span><textarea class="input" id="bot-welcome">👋 Welcome to Acme Routes! Send /route to see today's stops.</textarea></div>
+            </div>
+
+            <div class="mt">
+              <div class="switch-row"><div><div class="st">Require GPS on check-in</div><div class="sd">Reject check-ins without a live location</div></div><label class="switch"><input type="checkbox" checked /><span class="knob"></span></label></div>
+              <div class="switch-row"><div><div class="st">Require photos</div><div class="sd">At least one photo per visit</div></div><label class="switch"><input type="checkbox" checked /><span class="knob"></span></label></div>
+              <div class="switch-row"><div><div class="st">Daily summary to managers</div><div class="sd">One message at 20:00 with the day's numbers</div></div><label class="switch"><input type="checkbox" /><span class="knob"></span></label></div>
+            </div>
+
+            <div class="deploy-foot">
+              <button class="btn btn-primary" id="deploy-bot" type="button"><svg class="ic"><use href="#i-zap"/></svg> Deploy Telegram bot</button>
+              <span class="badge" id="bot-status"><span class="dot dot-muted"></span> Not deployed</span>
+            </div>
+            <div class="success-panel mt hidden" id="bot-success">
+              <span class="sp-ic"><svg class="ic"><use href="#i-check"/></svg></span>
+              <div><div class="sp-t">Bot deployed</div><div class="sp-d"><span class="mono">@AcmeRoutesBot</span> is live. Share it with your workers — they send <span class="mono">/route</span> to start checking in.</div></div>
+            </div>
+          </div>
+
+          <!-- Option B: Web app -->
+          <div class="card card-pad">
+            <div class="deploy-head">
+              <span class="dh-ic"><svg class="ic"><use href="#i-globe"/></svg></span>
+              <div>
+                <div class="dh-t">Option B — Web app</div>
+                <div class="dh-d">A branded, installable portal (PWA) for workers and clients.</div>
+              </div>
+            </div>
+
+            <div class="form-grid">
+              <div class="field"><span class="flabel">Portal name</span><input class="input" id="app-name" value="Acme Field Portal" /></div>
+              <div class="field"><span class="flabel">Subdomain</span><input class="input mono" id="app-sub" value="acme" /><span class="fhint">acme.starx.app</span></div>
+              <div class="field span-2">
+                <span class="flabel">Accent color</span>
+                <div class="swatches" id="swatches">
+                  <span class="swatch active" style="background:linear-gradient(135deg,#6366f1,#4f46e5)" data-c="Indigo" title="Indigo"></span>
+                  <span class="swatch" style="background:linear-gradient(135deg,#10b981,#059669)" data-c="Emerald" title="Emerald"></span>
+                  <span class="swatch" style="background:linear-gradient(135deg,#f59e0b,#d97706)" data-c="Amber" title="Amber"></span>
+                  <span class="swatch" style="background:linear-gradient(135deg,#ef4444,#dc2626)" data-c="Red" title="Red"></span>
+                  <span class="swatch" style="background:linear-gradient(135deg,#0ea5e9,#0284c7)" data-c="Sky" title="Sky"></span>
+                </div>
+              </div>
+              <div class="field span-2">
+                <span class="flabel">Company logo</span>
+                <div class="dropzone" id="logo-drop" style="padding:20px" tabindex="0" role="button" aria-label="Upload logo">
+                  <span class="dz-t" id="logo-title" style="font-size:13px">Drop your logo (.svg / .png)</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="mt">
+              <div class="switch-row"><div><div class="st">Client-facing view</div><div class="sd">Read-only visit history your clients can open</div></div><label class="switch"><input type="checkbox" checked /><span class="knob"></span></label></div>
+              <div class="switch-row"><div><div class="st">Installable (PWA)</div><div class="sd">Add-to-home-screen on workers' phones</div></div><label class="switch"><input type="checkbox" checked /><span class="knob"></span></label></div>
+            </div>
+
+            <div class="deploy-foot">
+              <button class="btn btn-primary" id="deploy-app" type="button"><svg class="ic"><use href="#i-globe"/></svg> Generate web app</button>
+              <span class="badge" id="app-status"><span class="dot dot-muted"></span> Not deployed</span>
+            </div>
+            <div class="success-panel mt hidden" id="app-success">
+              <span class="sp-ic"><svg class="ic"><use href="#i-check"/></svg></span>
+              <div><div class="sp-t">Web app generated</div><div class="sp-d">Your portal is live at <span class="mono" id="app-url">https://acme.starx.app</span> <a href="#" style="color:var(--accent)">open ↗</a>. Workers log in with their phone number.</div></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="section-title">Deployed outputs</div>
+        <div class="table-wrap stack-wrap">
+          <table class="table stack">
+            <thead><tr><th>Output</th><th>Target</th><th>Status</th><th>Last activity</th></tr></thead>
+            <tbody id="outputs-body">
+              <tr><td data-label="Output">Telegram bot</td><td class="mono" data-label="Target">@AcmeRoutesBot</td><td data-label="Status"><span class="badge ok"><span class="dot dot-ok"></span> Live</span></td><td data-label="Last activity">2 min ago</td></tr>
+              <tr><td data-label="Output">Web app</td><td class="mono" data-label="Target">acme.starx.app</td><td data-label="Status"><span class="badge"><span class="dot dot-muted"></span> Draft</span></td><td data-label="Last activity">—</td></tr>
+              <tr><td data-label="Output">API push (visits)</td><td class="mono" data-label="Target">POST api.acmelogistics.com/v1/visits</td><td data-label="Status"><span class="badge warn"><span class="dot dot-warn"></span> Pending key</span></td><td data-label="Last activity">—</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <div class="nav-backdrop" id="nav-backdrop"></div>
+  <div class="toast" id="toast"></div>
+
+  <script src="assets/app.js?v=1"></script>
+</body>
+</html>
