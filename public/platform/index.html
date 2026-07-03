@@ -1,148 +1,240 @@
 <!doctype html>
-<html lang="en">
+<html lang="es">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>StarX — Platform</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0a0a0a">
+  <title>StarX — Plataforma</title>
   <link rel="icon" href="/platform/assets/icon.svg">
   <link rel="manifest" href="/platform/manifest.webmanifest">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-  <link rel="stylesheet" href="/platform/assets/app.css?v=2">
+  <link rel="stylesheet" href="/platform/assets/app.css?v=4">
+  <script>
+    // Apply saved theme before first paint (default light).
+    (function () { try { if (localStorage.getItem('starx-theme') === 'dark') document.documentElement.classList.add('dark'); } catch (e) {} })();
+  </script>
 </head>
 <body>
-  <header class="top">
-    <span class="brand">⭐ StarX</span>
-    <span class="spacer"></span>
-    <span class="company" id="company">…</span>
-    <a class="btn ghost sm" href="/auth/logout">Logout</a>
+  <!-- icon sprite (Feather-style line icons) -->
+  <svg class="sprite" aria-hidden="true">
+    <symbol id="i-home" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V20a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V9.5"/><path d="M9.5 21v-6h5v6"/></symbol>
+    <symbol id="i-pin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></symbol>
+    <symbol id="i-users" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></symbol>
+    <symbol id="i-clock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
+    <symbol id="i-chart" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="m7 14 3-3 3 3 5-6"/></symbol>
+    <symbol id="i-send" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></symbol>
+    <symbol id="i-import" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/></symbol>
+    <symbol id="i-sheet" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2.5"/><path d="M3 9h18"/><path d="M3 15h18"/><path d="M9 3v18"/></symbol>
+    <symbol id="i-globe" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3a15 15 0 0 1 0 18 15 15 0 0 1 0-18Z"/></symbol>
+    <symbol id="i-map" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="m9 4-6 3v13l6-3 6 3 6-3V4l-6 3-6-3Z"/><path d="M9 4v13M15 7v13"/></symbol>
+    <symbol id="i-refresh" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></symbol>
+    <symbol id="i-menu" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></symbol>
+    <symbol id="i-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></symbol>
+    <symbol id="i-power" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18.4 6.6a9 9 0 1 1-12.8 0"/><line x1="12" y1="2" x2="12" y2="12"/></symbol>
+  </svg>
+
+  <header class="topbar">
+    <div class="top-left">
+      <button class="btn ghost sm icon" id="nav-toggle" type="button" aria-label="Abrir menú"><svg class="ic"><use href="#i-menu"/></svg></button>
+      <span class="brand-row">
+        <span class="mark"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 0c.7 6.3 5.4 11 11.7 11.7C17.4 12.4 12.7 17 12 23.3 11.3 17 6.6 12.4.3 11.7 6.6 11 11.3 6.3 12 0Z"/></svg></span>
+        <span class="brand">StarX</span>
+        <span class="meta" id="company">…</span>
+      </span>
+    </div>
+    <div class="top-right">
+      <span class="badge" id="bot-badge"><span class="dot dot-muted"></span> Bot</span>
+      <span class="user" id="user">…</span>
+      <button class="btn ghost sm icon" id="theme-toggle" type="button" aria-label="Cambiar tema"><span id="theme-icon" style="font-size:15px;line-height:1">🌙</span></button>
+      <a class="btn ghost sm" href="/auth/logout">Salir</a>
+    </div>
   </header>
 
-  <nav class="tabs">
-    <button class="tab active" data-view="dashboard">Dashboard</button>
-    <button class="tab" data-view="points">Points</button>
-    <button class="tab" data-view="workers">Workers</button>
-    <button class="tab" data-view="visits">Visits</button>
-    <button class="tab" data-view="bot">Bot</button>
-    <button class="tab" data-view="import">Import &amp; Setup</button>
-  </nav>
-
-  <main>
-    <!-- Dashboard -->
-    <section class="view" id="view-dashboard">
-      <div class="cards">
-        <div class="card stat"><div class="num" id="s-visits">–</div><div class="lbl">Total check-ins</div></div>
-        <div class="card stat"><div class="num" id="s-today">–</div><div class="lbl">Today</div></div>
-        <div class="card stat"><div class="num" id="s-points">–</div><div class="lbl">Active points</div></div>
-        <div class="card stat"><div class="num" id="s-workers">–</div><div class="lbl">Active workers</div></div>
+  <div class="layout">
+    <nav class="side" id="side-nav">
+      <div class="side-head">
+        <div class="nav-label">Menú</div>
+        <button class="btn ghost sm icon" id="nav-close" type="button" aria-label="Cerrar menú"><svg class="ic"><use href="#i-x"/></svg></button>
       </div>
-      <div class="card">
-        <h3>Recent check-ins map</h3>
-        <div id="map"></div>
-      </div>
-      <div class="grid2">
-        <div class="card"><h3>Top workers</h3><div id="top-workers"><div class="empty">No data yet</div></div></div>
-        <div class="card"><h3>Top points</h3><div id="top-points"><div class="empty">No data yet</div></div></div>
-      </div>
-    </section>
+      <div class="nav-label">Plataforma</div>
+      <button class="nav active" data-view="dashboard"><svg class="ic"><use href="#i-home"/></svg> Panel</button>
+      <button class="nav" data-view="points"><svg class="ic"><use href="#i-pin"/></svg> Puntos</button>
+      <button class="nav" data-view="workers"><svg class="ic"><use href="#i-users"/></svg> Trabajadores</button>
+      <button class="nav" data-view="visits"><svg class="ic"><use href="#i-check"/></svg> Visitas</button>
+      <div class="nav-label" style="margin-top:8px">Herramientas</div>
+      <button class="nav" data-view="bot"><svg class="ic"><use href="#i-send"/></svg> Bot de Telegram</button>
+      <button class="nav" data-view="import"><svg class="ic"><use href="#i-import"/></svg> Importar y configurar</button>
+      <div class="side-foot">StarX · MVP<br>Check-ins de campo con GPS y fotos.</div>
+    </nav>
 
-    <!-- Points -->
-    <section class="view hidden" id="view-points">
-      <div class="bar"><h2>Points</h2><span class="spacer"></span><button class="btn admin-only" id="add-point">+ Add point</button></div>
-      <div class="card"><div id="points-wrap"><div class="empty">Loading…</div></div></div>
-    </section>
+    <main class="main">
 
-    <!-- Workers -->
-    <section class="view hidden" id="view-workers">
-      <div class="bar"><h2>Workers</h2><span class="spacer"></span><button class="btn admin-only" id="add-worker">+ Add worker</button></div>
-      <div class="card"><div id="workers-wrap"><div class="empty">Loading…</div></div></div>
-    </section>
-
-    <!-- Visits -->
-    <section class="view hidden" id="view-visits">
-      <div class="bar"><h2>Visits</h2><span class="spacer"></span><button class="btn ghost sm" id="reload-visits">Refresh</button></div>
-      <div class="card"><div id="visits-wrap"><div class="empty">Loading…</div></div></div>
-    </section>
-
-    <!-- Bot -->
-    <section class="view hidden" id="view-bot">
-      <div class="bar"><h2>Telegram bot</h2><span class="spacer"></span><span class="pill" id="bot-pill">…</span></div>
-
-      <div class="card">
-        <h3>Status</h3>
-        <p class="muted" style="margin-top:0" id="bot-status">Checking…</p>
-        <div class="row2">
-          <button class="btn admin-only" id="bot-start">Turn bot ON</button>
-          <button class="btn danger admin-only hidden" id="bot-stop">Turn bot OFF</button>
+      <!-- ══════════════════ PANEL ══════════════════ -->
+      <section class="view active" id="view-dashboard">
+        <div class="view-head">
+          <div>
+            <h1 class="h1">Panel</h1>
+            <p class="lead">Actividad de campo: quién fue a dónde, cuándo y con prueba.</p>
+          </div>
         </div>
-      </div>
 
-      <div class="card admin-only" id="bot-token-card">
-        <h3>Connect a bot</h3>
-        <p class="muted" style="margin-top:0">Paste the token BotFather gave you, then press <b>Turn bot ON</b>. The bot runs live — no restart needed.</p>
-        <div class="field">
-          <label>BotFather token</label>
-          <input id="bot-token" type="password" placeholder="123456789:AA...your-token-here" autocomplete="off">
+        <div class="grid grid-4">
+          <div class="card kpi"><div class="lbl"><svg class="ic"><use href="#i-check"/></svg> Check-ins totales</div><div class="num" id="s-visits">–</div><div class="sub">desde el inicio</div></div>
+          <div class="card kpi"><div class="lbl"><svg class="ic"><use href="#i-clock"/></svg> Hoy</div><div class="num" id="s-today">–</div><div class="sub">check-ins de hoy</div></div>
+          <div class="card kpi"><div class="lbl"><svg class="ic"><use href="#i-pin"/></svg> Puntos activos</div><div class="num" id="s-points">–</div><div class="sub">paradas a visitar</div></div>
+          <div class="card kpi"><div class="lbl"><svg class="ic"><use href="#i-users"/></svg> Trabajadores activos</div><div class="num" id="s-workers">–</div><div class="sub">personal de campo</div></div>
         </div>
-      </div>
 
-      <div class="card">
-        <h3>How to get a token (30 seconds, one time)</h3>
-        <ol class="muted" style="margin:8px 0 0; padding-left:20px; line-height:1.7">
-          <li>Open Telegram and message <a href="https://t.me/BotFather" target="_blank" rel="noopener">@BotFather</a>.</li>
-          <li>Send <code>/newbot</code> and follow the prompts (name + username).</li>
-          <li>Copy the token it gives you (looks like <code>123456789:AA...</code>).</li>
-          <li>Paste it above and press <b>Turn bot ON</b>.</li>
-        </ol>
-        <p class="muted" style="margin-top:12px">Your workers never touch BotFather — they just open the bot and tap <code>/route</code>. Add them under <b>Workers</b> using their Telegram ID.</p>
-      </div>
-    </section>
-
-    <!-- Import & Setup -->
-    <section class="view hidden" id="view-import">
-      <div class="bar"><h2>Import &amp; Setup</h2></div>
-
-      <div class="card">
-        <h3>Onboard a Google Sheet</h3>
-        <p class="muted" style="margin-top:0">Create the <code>workers</code>, <code>points</code> and <code>visits</code> tabs (with headers) in your connected sheet. Safe to run again — it never deletes data.</p>
-        <button class="btn ghost admin-only" id="setup-btn">Set up sheet</button>
-      </div>
-
-      <div class="card">
-        <h3>Import from Excel / CSV</h3>
-        <div class="field">
-          <label>What are you importing?</label>
-          <select id="imp-target"><option value="points">Points (stops to visit)</option><option value="workers">Workers (field staff)</option></select>
+        <div class="grid mt">
+          <div class="card chart-card">
+            <p class="ct"><svg class="ic"><use href="#i-chart"/></svg> Visitas por día</p>
+            <div class="chart" id="chart-visits"><div class="empty">Sin datos aún</div></div>
+          </div>
         </div>
-        <div class="field">
-          <label>Choose a file (.xlsx, .xls, .csv)</label>
-          <input type="file" id="imp-file" accept=".xlsx,.xls,.csv">
-        </div>
-        <div id="imp-map"></div>
-        <button class="btn admin-only hidden" id="imp-run">Import rows</button>
-      </div>
-    </section>
-  </main>
 
-  <!-- Modal (add/edit) -->
+        <div class="grid grid-2 mt">
+          <div class="card chart-card">
+            <p class="ct"><svg class="ic"><use href="#i-users"/></svg> Top trabajadores</p>
+            <div class="barlist" id="top-workers"><div class="empty">Sin datos aún</div></div>
+          </div>
+          <div class="card chart-card">
+            <p class="ct"><svg class="ic"><use href="#i-pin"/></svg> Puntos más visitados</p>
+            <div class="barlist" id="top-points"><div class="empty">Sin datos aún</div></div>
+          </div>
+        </div>
+
+        <div class="section-title"><svg class="ic"><use href="#i-map"/></svg> Últimos check-ins en el mapa</div>
+        <div class="card chart-card"><div id="map"></div></div>
+
+        <div class="section-title">Estado del sistema</div>
+        <div class="grid grid-3">
+          <div class="card stile"><div class="row"><svg class="ic"><use href="#i-send"/></svg> Bot de Telegram</div><div class="val" id="st-bot"><span class="dot dot-muted"></span> Comprobando…</div></div>
+          <div class="card stile"><div class="row"><svg class="ic"><use href="#i-sheet"/></svg> Fuente de datos</div><div class="val"><span class="dot dot-ok"></span> Conectada</div></div>
+          <div class="card stile"><div class="row"><svg class="ic"><use href="#i-globe"/></svg> Aplicación web</div><div class="val"><span class="dot dot-ok"></span> En línea</div></div>
+        </div>
+      </section>
+
+      <!-- ══════════════════ PUNTOS ══════════════════ -->
+      <section class="view" id="view-points">
+        <div class="view-head">
+          <div><h1 class="h1">Puntos</h1><p class="lead">Las paradas que tus trabajadores deben visitar.</p></div>
+          <div class="toolbar"><button class="btn admin-only" id="add-point"><svg class="ic"><use href="#i-plus"/></svg> Añadir punto</button></div>
+        </div>
+        <div id="points-wrap"><div class="empty">Cargando…</div></div>
+      </section>
+
+      <!-- ══════════════════ TRABAJADORES ══════════════════ -->
+      <section class="view" id="view-workers">
+        <div class="view-head">
+          <div><h1 class="h1">Trabajadores</h1><p class="lead">Tu personal de campo. Añádelos con su ID de Telegram para que puedan hacer check-in.</p></div>
+          <div class="toolbar"><button class="btn admin-only" id="add-worker"><svg class="ic"><use href="#i-plus"/></svg> Añadir trabajador</button></div>
+        </div>
+        <div id="workers-wrap"><div class="empty">Cargando…</div></div>
+      </section>
+
+      <!-- ══════════════════ VISITAS ══════════════════ -->
+      <section class="view" id="view-visits">
+        <div class="view-head">
+          <div><h1 class="h1">Visitas</h1><p class="lead">Registro de check-ins con GPS y fotos. Escritos por el bot en tiempo real.</p></div>
+          <div class="toolbar"><button class="btn ghost" id="reload-visits"><svg class="ic"><use href="#i-refresh"/></svg> Actualizar</button></div>
+        </div>
+        <div id="visits-wrap"><div class="empty">Cargando…</div></div>
+      </section>
+
+      <!-- ══════════════════ BOT ══════════════════ -->
+      <section class="view" id="view-bot">
+        <div class="view-head">
+          <div><h1 class="h1">Bot de Telegram</h1><p class="lead">Tus trabajadores hacen check-in desde el chat que ya usan. Cero instalación.</p></div>
+          <div class="toolbar"><span class="pill off" id="bot-pill">…</span></div>
+        </div>
+
+        <div class="card card-pad">
+          <div class="deploy-head">
+            <span class="dh-ic"><svg class="ic"><use href="#i-send"/></svg></span>
+            <div><div class="dh-t">Estado del bot</div><div class="dh-d" id="bot-status">Comprobando…</div></div>
+          </div>
+          <div class="toolbar">
+            <button class="btn admin-only" id="bot-start"><svg class="ic"><use href="#i-power"/></svg> Encender bot</button>
+            <button class="btn danger admin-only hidden" id="bot-stop"><svg class="ic"><use href="#i-power"/></svg> Apagar bot</button>
+          </div>
+        </div>
+
+        <div class="card card-pad admin-only mt" id="bot-token-card">
+          <h3><svg class="ic"><use href="#i-send"/></svg> Conectar un bot</h3>
+          <p class="desc">Pega el token que te dio BotFather y pulsa <b>Encender bot</b>. Se activa al momento — sin reiniciar nada.</p>
+          <div class="field">
+            <label>Token de BotFather</label>
+            <input id="bot-token" type="password" placeholder="123456789:AA...tu-token-aquí" autocomplete="off">
+          </div>
+        </div>
+
+        <div class="card card-pad mt">
+          <h3><svg class="ic"><use href="#i-check"/></svg> Cómo obtener un token (30 segundos, una vez)</h3>
+          <ol class="muted" style="margin:8px 0 0; padding-left:20px; line-height:1.9">
+            <li>Abre Telegram y escribe a <a href="https://t.me/BotFather" target="_blank" rel="noopener">@BotFather</a>.</li>
+            <li>Envía <code>/newbot</code> y sigue los pasos (nombre + usuario).</li>
+            <li>Copia el token que te da (tipo <code>123456789:AA...</code>).</li>
+            <li>Pégalo arriba y pulsa <b>Encender bot</b>.</li>
+          </ol>
+          <p class="muted" style="margin-top:12px">Tus trabajadores nunca tocan BotFather — solo abren el bot y pulsan <code>/route</code>. Añádelos en <b>Trabajadores</b> con su ID de Telegram.</p>
+        </div>
+      </section>
+
+      <!-- ══════════════════ IMPORTAR Y CONFIGURAR ══════════════════ -->
+      <section class="view" id="view-import">
+        <div class="view-head">
+          <div><h1 class="h1">Importar y configurar</h1><p class="lead">Trae tus datos: sube puntos o trabajadores desde Excel/CSV, o prepara tu Google Sheet.</p></div>
+        </div>
+
+        <div class="card card-pad">
+          <h3><svg class="ic"><use href="#i-import"/></svg> Importar desde Excel / CSV</h3>
+          <p class="desc">Sube un archivo <b>.xlsx / .xls / .csv</b> con tus puntos o trabajadores. Te dejamos asignar cada columna antes de importar.</p>
+          <div class="field">
+            <label>¿Qué vas a importar?</label>
+            <select id="imp-target"><option value="points">Puntos (paradas a visitar)</option><option value="workers">Trabajadores (personal de campo)</option></select>
+          </div>
+          <div class="field">
+            <label>Elige un archivo (.xlsx, .xls, .csv)</label>
+            <input type="file" id="imp-file" accept=".xlsx,.xls,.csv">
+          </div>
+          <div id="imp-map"></div>
+          <button class="btn admin-only hidden" id="imp-run"><svg class="ic"><use href="#i-check"/></svg> Importar filas</button>
+        </div>
+
+        <div class="card card-pad mt">
+          <h3><svg class="ic"><use href="#i-sheet"/></svg> Preparar un Google Sheet</h3>
+          <p class="desc">Crea las pestañas <code>workers</code>, <code>points</code> y <code>visits</code> (con cabeceras) en tu hoja conectada. Se puede ejecutar de nuevo sin riesgo — nunca borra datos.</p>
+          <button class="btn ghost admin-only" id="setup-btn"><svg class="ic"><use href="#i-sheet"/></svg> Configurar hoja</button>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <div class="nav-backdrop" id="nav-backdrop"></div>
+
+  <!-- Modal (añadir/editar) -->
   <div class="modal hidden" id="modal">
     <div class="sheet">
-      <h3 id="modal-title">Edit</h3>
+      <h3 id="modal-title">Editar</h3>
       <div id="modal-body"></div>
       <div class="actions">
-        <button class="btn ghost" id="modal-cancel">Cancel</button>
-        <button class="btn" id="modal-save">Save</button>
+        <button class="btn ghost" id="modal-cancel">Cancelar</button>
+        <button class="btn" id="modal-save">Guardar</button>
       </div>
     </div>
   </div>
 
-  <!-- Lightbox (full-size check-in photo) -->
+  <!-- Lightbox (foto de check-in a tamaño completo) -->
   <div class="lightbox hidden" id="lightbox">
-    <img id="lightbox-img" alt="check-in photo">
+    <img id="lightbox-img" alt="foto de check-in">
   </div>
 
   <div class="toast" id="toast"></div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script src="/platform/assets/app.js?v=3"></script>
+  <script src="/platform/assets/app.js?v=4"></script>
 </body>
 </html>
