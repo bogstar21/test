@@ -23,6 +23,35 @@ function mountVisitRoutes(app) {
     } catch (e) { fail(res, e); }
   });
 
+  // Serve a single check-in photo. The bot stored Telegram file_ids on the visit; we
+  // resolve one to a URL and PROXY the bytes so the bot token never reaches the browser.
+  // Needs the bot to be running (that's who holds the token) — returns 409 if it's off.
+  r.get("/visits/:visitId/photo/:idx", async (req, res) => {
+    try {
+      const visits = await ds(req).listVisits({ limit: 5000 });
+      const visit = visits.find(v => String(v.visitId) === String(req.params.visitId));
+      if (!visit) return res.status(404).json({ error: "visit_not_found" });
+
+      const ids = String(visit.photoFileIds || "").split(",").map(s => s.trim()).filter(Boolean);
+      const fileId = ids[parseInt(req.params.idx, 10) || 0];
+      if (!fileId) return res.status(404).json({ error: "photo_not_found" });
+
+      let link;
+      try {
+        link = await require("../bot/manager").fileLink(fileId);
+      } catch (e) {
+        if (e && e.code === "bot_off") return res.status(409).json({ error: "Bot is off — turn it on to load photos." });
+        throw e;
+      }
+
+      const tg = await fetch(link);
+      if (!tg.ok) return res.status(502).json({ error: "telegram_fetch_failed" });
+      res.set("Content-Type", tg.headers.get("content-type") || "image/jpeg");
+      res.set("Cache-Control", "private, max-age=3600");
+      res.send(Buffer.from(await tg.arrayBuffer()));
+    } catch (e) { fail(res, e); }
+  });
+
   // Dashboard aggregates. Reads points + workers + visits in one go so the dashboard
   // needs a single request.
   r.get("/stats", async (req, res) => {

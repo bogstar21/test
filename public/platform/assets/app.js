@@ -82,6 +82,7 @@
     else if (v === "points") loadPoints();
     else if (v === "workers") loadWorkers();
     else if (v === "visits") loadVisits();
+    else if (v === "bot") loadBot();
     else if (v === "import") renderMapping();
   }
 
@@ -197,6 +198,16 @@
   }
 
   // ── Visits ───────────────────────────────────────────────────────────────────
+  function photoCell(v) {
+    var n = v.photoCount || 0;
+    if (!n) return '<span class="muted">—</span>';
+    var html = "";
+    for (var i = 0; i < n; i++) {
+      var src = "/api/visits/" + encodeURIComponent(v.visitId) + "/photo/" + i;
+      html += '<img class="thumb" src="' + src + '" alt="check-in photo" data-full="' + src + '" loading="lazy">';
+    }
+    return '<div class="thumbs">' + html + "</div>";
+  }
   async function loadVisits() {
     var wrap = $("#visits-wrap");
     try {
@@ -205,9 +216,57 @@
       wrap.innerHTML = table(["Time", "Worker", "Point", "Location", "Photos", "Note"], data.visits.map(function (v) {
         return "<tr><td>" + fmtTime(v.timestamp) + "</td><td>" + esc(v.workerName || v.workerTelegramId) + "</td><td>" + esc(v.pointName || v.pointId) + "</td><td>" +
           (v.mapsLink ? '<a href="' + esc(v.mapsLink) + '" target="_blank" rel="noopener">map ↗</a>' : '<span class="muted">—</span>') +
-          "</td><td>" + (v.photoCount || 0) + '</td><td class="muted">' + esc(v.note || "") + "</td></tr>";
+          "</td><td>" + photoCell(v) + '</td><td class="muted">' + esc(v.note || "") + "</td></tr>";
       }).join(""));
     } catch (e) { wrap.innerHTML = '<div class="empty">' + esc(e.message) + "</div>"; }
+  }
+
+  // Lightbox: click a thumbnail to view the full photo.
+  function openLightbox(src) {
+    var lb = $("#lightbox");
+    $("#lightbox-img").src = src;
+    lb.classList.remove("hidden");
+  }
+  function closeLightbox() { $("#lightbox").classList.add("hidden"); $("#lightbox-img").src = ""; }
+
+  // ── Bot ──────────────────────────────────────────────────────────────────────
+  function renderBot(s) {
+    var on = !!(s && s.running);
+    var pill = $("#bot-pill");
+    pill.className = "pill " + (on ? "on" : "off");
+    pill.textContent = on ? "running" : "off";
+    if (on) {
+      var uname = s.username ? ("@" + esc(s.username)) : "your bot";
+      var link = s.username ? ' — <a href="https://t.me/' + esc(s.username) + '" target="_blank" rel="noopener">open ' + uname + " ↗</a>" : "";
+      $("#bot-status").innerHTML = "Bot <b>" + uname + "</b> is live and receiving check-ins." + link;
+    } else {
+      $("#bot-status").textContent = "The bot is off. Paste a token below and turn it on.";
+    }
+    // Toggle buttons/token card (respecting admin gating handled by applyAdmin).
+    $("#bot-start").classList.toggle("hidden", on || !state.isAdmin);
+    $("#bot-stop").classList.toggle("hidden", !on || !state.isAdmin);
+    $("#bot-token-card").classList.toggle("hidden", on || !state.isAdmin);
+  }
+  async function loadBot() {
+    try { renderBot(await api("/api/bot/status")); }
+    catch (e) { $("#bot-status").textContent = e.message; }
+  }
+  async function startBot() {
+    var token = ($("#bot-token").value || "").trim();
+    if (!token) { toast("Paste your BotFather token first.", true); return; }
+    var btn = $("#bot-start"); btn.disabled = true; btn.textContent = "Starting…";
+    try {
+      var s = await api("/api/bot/start", { method: "POST", body: JSON.stringify({ token: token }) });
+      $("#bot-token").value = "";
+      toast(s.username ? ("Bot @" + s.username + " is live") : "Bot started");
+      renderBot(s);
+    } catch (e) { toast(e.message, true); }
+    finally { btn.disabled = false; btn.textContent = "Turn bot ON"; }
+  }
+  async function stopBot() {
+    if (!confirm("Turn the bot off? Workers won't be able to check in until it's back on.")) return;
+    try { renderBot(await api("/api/bot/stop", { method: "POST" })); toast("Bot stopped"); }
+    catch (e) { toast(e.message, true); }
   }
 
   // ── Import ───────────────────────────────────────────────────────────────────
@@ -272,11 +331,22 @@
     // Delegated row actions
     document.addEventListener("click", function (e) {
       var t = e.target;
+      var th = t.closest(".thumb");             if (th) return openLightbox(th.dataset.full);
       var ep = t.closest("[data-edit-point]");  if (ep) return editPoint(+ep.dataset.editPoint);
       var dp = t.closest("[data-del-point]");   if (dp) return delPoint(+dp.dataset.delPoint);
       var ew = t.closest("[data-edit-worker]"); if (ew) return editWorker(+ew.dataset.editWorker);
       var dw = t.closest("[data-del-worker]");  if (dw) return delWorker(+dw.dataset.delWorker);
     });
+
+    // Hide thumbnails that fail to load (e.g. seeded demo visits have no real photo,
+    // or the bot is off). Uses capture because 'error' events don't bubble.
+    document.addEventListener("error", function (e) {
+      if (e.target && e.target.classList && e.target.classList.contains("thumb")) e.target.remove();
+    }, true);
+
+    // Lightbox close (click backdrop or press Esc).
+    $("#lightbox").addEventListener("click", closeLightbox);
+    document.addEventListener("keydown", function (e) { if (e.key === "Escape") closeLightbox(); });
 
     // Add buttons
     $("#add-point").onclick = function () {
@@ -292,6 +362,11 @@
       });
     };
     $("#reload-visits").onclick = loadVisits;
+
+    // Bot
+    $("#bot-start").onclick = startBot;
+    $("#bot-stop").onclick = stopBot;
+    $("#bot-token").addEventListener("keydown", function (e) { if (e.key === "Enter") startBot(); });
 
     // Import
     $("#imp-target").onchange = renderMapping;

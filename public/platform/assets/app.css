@@ -109,3 +109,17 @@ tr:last-child td { border-bottom: 0; }
 .map-grid { display: grid; grid-template-columns: 140px 1fr; gap: 10px 14px; align-items: center; margin: 14px 0; }
 .map-grid label { color: var(--text-muted); font-size: 14px; }
 .empty { color: var(--text-muted); padding: 24px; text-align: center; }
+
+/* Check-in photo thumbnails + lightbox */
+.thumbs { display: flex; flex-wrap: wrap; gap: 6px; }
+.thumb {
+  width: 44px; height: 44px; object-fit: cover; border-radius: 8px;
+  border: 1px solid var(--card-border); cursor: pointer; background: #161616;
+  transition: transform .12s ease;
+}
+.thumb:hover { transform: scale(1.06); border-color: #fff; }
+.lightbox {
+  position: fixed; inset: 0; background: rgba(0,0,0,.85);
+  display: flex; align-items: center; justify-content: center; z-index: 70; padding: 24px; cursor: zoom-out;
+}
+.lightbox img { max-width: 92vw; max-height: 92vh; border-radius: 12px; box-shadow: 0 8px 40px rgba(0,0,0,.6); }

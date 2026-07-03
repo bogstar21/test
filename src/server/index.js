@@ -14,6 +14,7 @@ const { mountPointRoutes }    = require("./routes/points");
 const { mountWorkerRoutes }   = require("./routes/workers");
 const { mountVisitRoutes }    = require("./routes/visits");
 const { mountImportRoutes }   = require("./routes/import");
+const { mountBotRoutes }      = require("./routes/bot");
 
 function createApp(deps = {}) {
   const app = express();
@@ -48,6 +49,7 @@ function createApp(deps = {}) {
   mountWorkerRoutes(app);       // /api/workers  CRUD
   mountVisitRoutes(app);        // /api/visits, /api/stats
   mountImportRoutes(app);       // /api/import/*
+  mountBotRoutes(app);          // /api/bot/status, /start, /stop
   mountPublicRoutes(app, deps); // /health, /
 
   app.use((_req, res) => res.status(404).type("text/plain").send("Not found"));
@@ -60,6 +62,17 @@ function startServer(deps = {}) {
     console.log(`🌐 StarX platform on :${config.PORT}`);
     if (!config.PLATFORM_PASSWORD) console.log("⚠️  PLATFORM_PASSWORD not set — set it in Railway to enable login.");
     if (!process.env.SESSION_SECRET) console.log("⚠️  SESSION_SECRET not set — sessions reset on every restart. Set it in Railway.");
+
+    // Optional: auto-start the bot on boot if a token is in the env. Otherwise the
+    // bot is started on demand from the web app's Bot tab (POST /api/bot/start).
+    const token = process.env.TELEGRAM_TOKEN || "";
+    if (token) {
+      require("./bot/manager").start(token)
+        .then(s => console.log(`🤖 Bot auto-started from TELEGRAM_TOKEN (@${s.username}).`))
+        .catch(e => console.error("Bot auto-start failed:", e && e.message));
+    } else {
+      console.log("ℹ️  No TELEGRAM_TOKEN — start the bot anytime from the web app (Bot tab).");
+    }
   });
   return app;
 }

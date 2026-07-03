@@ -18,8 +18,9 @@ const TENANTS = [
   {
     id:       "default",
     name:     process.env.TENANT_NAME || "StarX Demo",
-    // MVP: data lives in memory (no Google, no credentials). Switch to "sheets"
-    // and set SHEET_ID/GOOGLE_CREDENTIALS when you want real persistence.
+    // MVP: data lives in memory (no Google, no credentials). Switch to:
+    //   "supabase" (+ SUPABASE_URL / SUPABASE_SERVICE_KEY) for persistent storage + API, or
+    //   "sheets"   (+ SHEET_ID / GOOGLE_CREDENTIALS)      to persist in Google Sheets.
     source:   process.env.DATASOURCE || "memory",
     sheetId:  process.env.SHEET_ID || "",
     // Default password so the platform runs with zero config. CHANGE THIS in any

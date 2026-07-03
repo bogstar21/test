@@ -23,6 +23,11 @@ function forTenant(tenant) {
       // Loaded lazily so the MVP never requires googleapis/credentials.
       impl = require("./sheets").makeSheetsSource(tenant.sheetId);
       break;
+    case "supabase":
+      // Persistent store over Supabase (Postgres + REST API). Loaded lazily so the
+      // MVP never requires @supabase/supabase-js or credentials until it's used.
+      impl = require("./supabase").makeSupabaseSource(tenant);
+      break;
     // case "api":   impl = makeApiSource(tenant);      break;   // Phase 3
     // case "postgres": impl = makePgSource(tenant);    break;   // Phase 4
     default:
