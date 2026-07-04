@@ -9,6 +9,11 @@
 //   visits  : timestamp | visitId | workerTelegramId | workerName | pointId |
 //             pointName | lat | lng | mapsLink | photoCount | photoFileIds | note
 const { getSheetsClient } = require("../sheets");
+const { phonesMatch } = require("../util");
+
+// In-process settings for the sheets datasource (not persisted — Supabase is the
+// recommended store when you need durable settings and PWA photos).
+const _settings = new Map();
 
 const TABS = {
   workers: { name: "workers", headers: ["telegramId", "name", "phone", "active"] },
@@ -125,6 +130,14 @@ function makeSheetsSource(sheetId) {
     const prepared = rows.map(r => [str(r[0]).trim(), str(r[1]).trim(), str(r[2]).trim(), "1"]).filter(r => r[0] || r[1] || r[2]);
     return appendBlock(TABS.workers.name, prepared);
   }
+  async function findWorkerByPhone(phone) {
+    const workers = await listWorkers();
+    return workers.find(w => phonesMatch(w.phone, phone)) || null;
+  }
+  async function linkWorkerTelegram(row, telegramId) {
+    await writeRange(`${TABS.workers.name}!A${row}`, [[str(telegramId).trim()]]);
+    return true;
+  }
 
   // ── Points ─────────────────────────────────────────────────────────────────
   async function listPoints() {
@@ -136,8 +149,17 @@ function makeSheetsSource(sheetId) {
       address: str(r[2]).trim(),
       lat: str(r[3]).trim(),
       lng: str(r[4]).trim(),
+      geolocated: !!(str(r[3]).trim() && str(r[4]).trim()),
       active: isActive(r[5]),
     })).filter(p => p.id || p.name || p.address);
+  }
+  async function ensurePointLocation(pointId, lat, lng) {
+    if (!pointId || !lat || !lng) return false;
+    const points = await listPoints();
+    const p = points.find(x => String(x.id) === String(pointId));
+    if (!p || (p.lat && p.lng)) return false;
+    await updatePoint(p.row, { id: p.id, name: p.name, address: p.address, lat, lng, active: p.active });
+    return true;
   }
   function newId(prefix) { return prefix + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
   async function addPoint(f) {
@@ -174,6 +196,7 @@ function makeSheetsSource(sheetId) {
       photoCount: parseInt(r[9], 10) || 0,
       photoFileIds: str(r[10]),
       note: str(r[11]),
+      source: "bot",
     })).filter(v => v.timestamp || v.visitId);
     visits.sort((a, b) => (Date.parse(b.timestamp) || 0) - (Date.parse(a.timestamp) || 0)); // newest first
     const cap = opts.limit || MAX_ROWS;
@@ -200,11 +223,21 @@ function makeSheetsSource(sheetId) {
     return row[1]; // visitId
   }
 
+  // PWA photo storage isn't available on the Sheets datasource — use Supabase for that.
+  async function uploadPhoto() { throw new Error("PWA photo upload needs the Supabase datasource."); }
+  async function getPhoto() { return null; }
+
+  // Settings live in-process for the sheets fallback (not durable across restarts).
+  async function getSetting(key, def) { return _settings.has(key) ? _settings.get(key) : (def == null ? "" : def); }
+  async function setSetting(key, value) { _settings.set(key, str(value)); }
+
   return {
     ensureSetup,
-    listWorkers, addWorker, updateWorker, deleteWorker, appendWorkers,
-    listPoints, addPoint, updatePoint, deletePoint, appendPoints,
+    listWorkers, addWorker, updateWorker, deleteWorker, appendWorkers, findWorkerByPhone, linkWorkerTelegram,
+    listPoints, addPoint, updatePoint, deletePoint, appendPoints, ensurePointLocation,
     listVisits, addVisit,
+    uploadPhoto, getPhoto,
+    getSetting, setSetting,
   };
 }
 

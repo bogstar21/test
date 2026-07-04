@@ -35,6 +35,10 @@ function setSessionCookie(res, user) {
     role:     user.role || "admin",
     tenantId: user.tenantId || "",
     company:  user.company || "",
+    // Worker sessions (PWA) carry the datasource row + telegramId so a web check-in
+    // is attributed to the same worker record the bot links by phone.
+    workerRow:  user.workerRow || "",
+    telegramId: user.telegramId || "",
     exp:      Date.now() + config.SESSION_TTL_MS,
   };
   res.cookie(config.SESSION_COOKIE, signSession(payload), {
@@ -94,6 +98,20 @@ function requireRole(...roles) {
   };
 }
 
+// ─── API-key gate (for the client-facing connector at /api/v1) ───────────────────
+// Separate credential from the platform login. If INTEGRATION_API_KEY is unset, the
+// connector is OFF (503) — nothing is exposed until a key is deliberately set. The key
+// is read from the `X-API-Key` header, or `?key=` for quick manual tests.
+function requireApiKey(req, res, next) {
+  const configured = process.env.INTEGRATION_API_KEY || "";
+  if (!configured) return res.status(503).json({ error: "connector_disabled", detail: "Set INTEGRATION_API_KEY to enable the API." });
+  const sent = req.get("x-api-key") || req.query.key || "";
+  if (!sent || !safeEqual(sent, configured)) return res.status(401).json({ error: "bad_api_key" });
+  // Connector always acts on the default tenant for now (single-company MVP).
+  req.user = req.user || { role: "api", tenantId: config.TENANTS[0] && config.TENANTS[0].id, company: config.TENANTS[0] && config.TENANTS[0].name, viaApi: true };
+  next();
+}
+
 // ─── Password login (per-tenant) ───────────────────────────────────────────────
 function passwordConfigured() { return config.TENANTS.some(t => t.password); }
 
@@ -126,6 +144,33 @@ function mountAuthRoutes(app) {
     res.redirect(next_ || "/platform");
   });
 
+  // Worker login for the PWA: phone-only (workers have no password — they're identified
+  // by the phone their manager preloaded, same key the bot links by). Gated by the
+  // tenant's `pwa_enabled` setting so a company can turn the PWA on/off from the UI.
+  app.post("/auth/worker", async (req, res) => {
+    const phone = (req.body && req.body.phone) || "";
+    if (!phone) return res.status(400).json({ error: "no_phone" });
+    try {
+      const tenant = config.defaultTenant();
+      const source = require("./datasource").forTenant(tenant);
+      const enabled = String(await source.getSetting("pwa_enabled", "0")) === "1";
+      if (!enabled) return res.status(403).json({ error: "pwa_disabled", detail: "The web check-in app is off. Ask your manager to enable it." });
+
+      const worker = await source.findWorkerByPhone(phone);
+      if (!worker || !worker.active) return res.status(401).json({ error: "not_found", detail: "Phone not found. Ask your manager to add your number." });
+
+      setSessionCookie(res, {
+        email: "worker", name: worker.name || "Worker", role: "worker",
+        tenantId: tenant.id, company: tenant.name,
+        workerRow: worker.row, telegramId: worker.telegramId,
+      });
+      res.json({ ok: true, name: worker.name || "Worker" });
+    } catch (e) {
+      console.error("/auth/worker error:", e && e.message);
+      res.status(500).json({ error: "server_error" });
+    }
+  });
+
   app.get("/auth/logout", (req, res) => {
     res.clearCookie(config.SESSION_COOKIE);
     res.redirect("/platform/login");
@@ -145,4 +190,4 @@ function notConfiguredPage() {
     '</div></body></html>';
 }
 
-module.exports = { mountAuthRoutes, attachUser, requireAuth, requireRole, setSessionCookie, verifySession };
+module.exports = { mountAuthRoutes, attachUser, requireAuth, requireRole, requireApiKey, setSessionCookie, verifySession };

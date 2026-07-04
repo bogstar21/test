@@ -8,6 +8,8 @@
 // When you're ready to persist for real, flip the tenant's `source` back to "sheets"
 // (or add "api"/"postgres"): nothing else in the routes or the bot changes.
 
+const { phonesMatch } = require("../util");
+
 function isActive(v) {
   const s = String(v == null ? "" : v).trim().toLowerCase();
   return !(s === "0" || s === "false" || s === "no" || s === "ні");
@@ -23,18 +25,20 @@ function seed() {
   // per item for the life of the process.
   return {
     nextRow: 2,
+    settings: {},
+    photos: new Map(), // ref → { buffer, contentType } for PWA check-in photos
     workers: [
       { row: 2, telegramId: "100000001", name: "Ivan Petrenko", phone: "+380671112233", active: true },
       { row: 3, telegramId: "100000002", name: "Olena Kovalenko", phone: "+380677654321", active: true },
     ],
     points: [
-      { row: 2, id: "P1", name: "Silpo Khreshchatyk", address: "Khreshchatyk St 15, Kyiv", lat: "50.4471", lng: "30.5219", active: true },
-      { row: 3, id: "P2", name: "ATB Podil",           address: "Verkhnii Val St 24, Kyiv", lat: "50.4655", lng: "30.5145", active: true },
-      { row: 4, id: "P3", name: "Novus Lukyanivka",    address: "Sichovykh Striltsiv St 103, Kyiv", lat: "50.4610", lng: "30.4890", active: true },
+      { row: 2, id: "P1", name: "Silpo Khreshchatyk", address: "Khreshchatyk St 15, Kyiv", lat: "50.4471", lng: "30.5219", geolocated: true, active: true },
+      { row: 3, id: "P2", name: "ATB Podil",           address: "Verkhnii Val St 24, Kyiv", lat: "50.4655", lng: "30.5145", geolocated: true, active: true },
+      { row: 4, id: "P3", name: "Novus Lukyanivka",    address: "Sichovykh Striltsiv St 103, Kyiv", lat: "", lng: "", geolocated: false, active: true },
     ],
     visits: [
-      { timestamp: new Date(Date.now() - 3600e3).toISOString(), visitId: "V1", workerTelegramId: "100000001", workerName: "Ivan Petrenko", pointId: "P1", pointName: "Silpo Khreshchatyk", lat: "50.4471", lng: "30.5219", mapsLink: "https://www.google.com/maps?q=50.4471,30.5219", photoCount: 2, photoFileIds: "", note: "" },
-      { timestamp: new Date(Date.now() - 1800e3).toISOString(), visitId: "V2", workerTelegramId: "100000002", workerName: "Olena Kovalenko", pointId: "P2", pointName: "ATB Podil", lat: "50.4655", lng: "30.5145", mapsLink: "https://www.google.com/maps?q=50.4655,30.5145", photoCount: 1, photoFileIds: "", note: "" },
+      { timestamp: new Date(Date.now() - 3600e3).toISOString(), visitId: "V1", workerTelegramId: "100000001", workerName: "Ivan Petrenko", pointId: "P1", pointName: "Silpo Khreshchatyk", lat: "50.4471", lng: "30.5219", mapsLink: "https://www.google.com/maps?q=50.4471,30.5219", photoCount: 2, photoFileIds: "", source: "bot", note: "" },
+      { timestamp: new Date(Date.now() - 1800e3).toISOString(), visitId: "V2", workerTelegramId: "100000002", workerName: "Olena Kovalenko", pointId: "P2", pointName: "ATB Podil", lat: "50.4655", lng: "30.5145", mapsLink: "https://www.google.com/maps?q=50.4655,30.5145", photoCount: 1, photoFileIds: "", source: "bot", note: "" },
     ],
   };
 }
@@ -95,12 +99,13 @@ function makeMemorySource(tenantId) {
   }
   async function addPoint(f) {
     const id = str(f.id).trim() || newId("P");
+    const lat = str(f.lat).trim(), lng = str(f.lng).trim();
     db.points.push({
       row: takeRow(), id,
       name: str(f.name).trim(),
       address: str(f.address).trim(),
-      lat: str(f.lat).trim(),
-      lng: str(f.lng).trim(),
+      lat, lng,
+      geolocated: !!(lat && lng),
       active: f.active !== false,
     });
     return id;
@@ -113,6 +118,7 @@ function makeMemorySource(tenantId) {
     p.address = str(f.address).trim();
     p.lat = str(f.lat).trim();
     p.lng = str(f.lng).trim();
+    p.geolocated = !!(p.lat && p.lng);
     p.active = f.active !== false;
   }
   async function deletePoint(row) {
@@ -125,17 +131,38 @@ function makeMemorySource(tenantId) {
     for (const r of rows) {
       const name = str(r[1]).trim(), address = str(r[2]).trim();
       if (!name && !address) continue;
+      const lat = str(r[3]).trim(), lng = str(r[4]).trim();
       db.points.push({
         row: takeRow(),
         id: str(r[0]).trim() || newId("P"),
         name, address,
-        lat: str(r[3]).trim(),
-        lng: str(r[4]).trim(),
+        lat, lng,
+        geolocated: !!(lat && lng),
         active: true,
       });
       n++;
     }
     return n;
+  }
+
+  // Set a point's coords the first time it's checked in (only if still empty).
+  async function ensurePointLocation(pointId, lat, lng) {
+    if (!pointId || !lat || !lng) return false;
+    const p = db.points.find(x => String(x.id) === String(pointId));
+    if (!p || (p.lat && p.lng)) return false;
+    p.lat = str(lat); p.lng = str(lng); p.geolocated = true;
+    return true;
+  }
+
+  // Registration (holodBot-style): find a worker by phone, then link their Telegram id.
+  async function findWorkerByPhone(phone) {
+    return db.workers.find(w => phonesMatch(w.phone, phone)) || null;
+  }
+  async function linkWorkerTelegram(row, telegramId) {
+    const w = db.workers.find(x => x.row === row);
+    if (!w) return false;
+    w.telegramId = str(telegramId).trim();
+    return true;
   }
 
   // ── Visits ───────────────────────────────────────────────────────────────────
@@ -160,16 +187,35 @@ function makeMemorySource(tenantId) {
       mapsLink: str(v.mapsLink),
       photoCount: Number(v.photoCount) || 0,
       photoFileIds: Array.isArray(v.photoFileIds) ? v.photoFileIds.join(",") : str(v.photoFileIds),
+      source: str(v.source) || "bot",
       note: str(v.note),
     });
     return visitId;
   }
 
+  // ── Photos (PWA uploads) ───────────────────────────────────────────────────────
+  async function uploadPhoto(buffer, contentType) {
+    const ref = newId("ph") + ".jpg";
+    db.photos.set(ref, { buffer, contentType: contentType || "image/jpeg" });
+    return ref;
+  }
+  async function getPhoto(ref) {
+    return db.photos.get(ref) || null;
+  }
+
+  // ── Settings (key/value) ───────────────────────────────────────────────────────
+  async function getSetting(key, def) {
+    return Object.prototype.hasOwnProperty.call(db.settings, key) ? db.settings[key] : (def == null ? "" : def);
+  }
+  async function setSetting(key, value) { db.settings[key] = str(value); }
+
   return {
     ensureSetup,
-    listWorkers, addWorker, updateWorker, deleteWorker, appendWorkers,
-    listPoints, addPoint, updatePoint, deletePoint, appendPoints,
+    listWorkers, addWorker, updateWorker, deleteWorker, appendWorkers, findWorkerByPhone, linkWorkerTelegram,
+    listPoints, addPoint, updatePoint, deletePoint, appendPoints, ensurePointLocation,
     listVisits, addVisit,
+    uploadPhoto, getPhoto,
+    getSetting, setSetting,
   };
 }
 

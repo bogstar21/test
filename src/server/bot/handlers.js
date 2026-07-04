@@ -25,12 +25,22 @@ function attachHandlers(bot) {
 
   // ── Keyboards ────────────────────────────────────────────────────────────
   const locationKb = { keyboard: [[{ text: "📍 Send location", request_location: true }]], resize_keyboard: true, one_time_keyboard: true };
+  const contactKb   = { keyboard: [[{ text: "📱 Share my phone number", request_contact: true }]], resize_keyboard: true, one_time_keyboard: true };
   const doneKb      = { keyboard: [[{ text: "✅ Done" }], [{ text: "❌ Cancel" }]], resize_keyboard: true };
   const removeKb    = { remove_keyboard: true };
 
   async function findWorker(telegramId) {
     const workers = await source().listWorkers();
     return workers.find(w => String(w.telegramId) === String(telegramId) && w.active) || null;
+  }
+
+  // Prompt an unregistered user to share their phone so we can link them by phone
+  // (holodBot-style registration): worker is precargado with a phone, sharing the
+  // Telegram contact links their telegram_id to that row.
+  function askForContact(chatId) {
+    return bot.sendMessage(chatId,
+      "👋 Welcome to *StarX*.\n\nTo register, share your phone number — I'll match it to your worker profile.",
+      { parse_mode: "Markdown", reply_markup: contactKb });
   }
 
   function esc(s) { return String(s == null ? "" : s).replace(/([_*\[\]()`])/g, "\\$1"); }
@@ -41,11 +51,7 @@ function attachHandlers(bot) {
     const userId = msg.from.id;
     try {
       const worker = await findWorker(userId);
-      if (!worker) {
-        return bot.sendMessage(msg.chat.id,
-          `👋 Welcome to *StarX*.\n\nYou're not registered yet. Ask your manager to add this Telegram ID as a worker:\n\n\`${userId}\``,
-          { parse_mode: "Markdown" });
-      }
+      if (!worker) return askForContact(msg.chat.id);
       bot.sendMessage(msg.chat.id,
         `👋 Hi *${esc(worker.name || "there")}*!\n\nTap /route to see your stops and start checking in.`,
         { parse_mode: "Markdown" });
@@ -61,7 +67,7 @@ function attachHandlers(bot) {
     const userId = msg.from.id;
     try {
       const worker = await findWorker(userId);
-      if (!worker) return bot.sendMessage(msg.chat.id, `You're not registered. Your Telegram ID: \`${userId}\``, { parse_mode: "Markdown" });
+      if (!worker) return askForContact(msg.chat.id);
 
       const points = (await source().listPoints()).filter(p => p.active);
       if (!points.length) return bot.sendMessage(msg.chat.id, "No stops to visit yet. Your manager hasn't added any points.");
@@ -114,6 +120,34 @@ function attachHandlers(bot) {
       { parse_mode: "Markdown", reply_markup: doneKb });
   });
 
+  // ── Contact → register by phone ──────────────────────────────────────────────
+  bot.on("contact", async (msg) => {
+    if (msg.chat.type !== "private") return;
+    const userId = msg.from.id;
+    // Only trust the user's OWN shared contact (Telegram sets user_id on it).
+    if (msg.contact.user_id && String(msg.contact.user_id) !== String(userId)) {
+      return bot.sendMessage(msg.chat.id, "Please share *your own* phone number.", { parse_mode: "Markdown", reply_markup: contactKb });
+    }
+    try {
+      const already = await findWorker(userId);
+      if (already) return bot.sendMessage(msg.chat.id, `✅ You're already registered as *${esc(already.name)}*. Tap /route.`, { parse_mode: "Markdown", reply_markup: removeKb });
+
+      const worker = await source().findWorkerByPhone(msg.contact.phone_number);
+      if (!worker) {
+        return bot.sendMessage(msg.chat.id,
+          "❌ I couldn't find your number in the worker list. Ask your manager to add your phone, then tap /start again.",
+          { reply_markup: removeKb });
+      }
+      await source().linkWorkerTelegram(worker.row, userId);
+      bot.sendMessage(msg.chat.id,
+        `✅ Registered as *${esc(worker.name || "worker")}*!\n\nTap /route to see your stops and start checking in.`,
+        { parse_mode: "Markdown", reply_markup: removeKb });
+    } catch (e) {
+      console.error("contact/register error:", e.message);
+      bot.sendMessage(msg.chat.id, "⚠️ Could not complete registration. Try again shortly.", { reply_markup: removeKb });
+    }
+  });
+
   // ── Photos ───────────────────────────────────────────────────────────────────
   bot.on("photo", (msg) => {
     if (msg.chat.type !== "private") return;
@@ -129,7 +163,7 @@ function attachHandlers(bot) {
   // ── Done / Cancel (plain text from the reply keyboard) ───────────────────────
   bot.on("message", async (msg) => {
     if (msg.chat.type !== "private") return;
-    if (msg.location || msg.photo) return;
+    if (msg.location || msg.photo || msg.contact) return;
     const text = (msg.text || "").trim();
     if (text.startsWith("/")) return; // commands handled by onText
     const userId = msg.from.id;
@@ -152,8 +186,12 @@ function attachHandlers(bot) {
           lat: st.lat, lng: st.lng, mapsLink: st.mapsLink,
           photoCount: (st.photos || []).length,
           photoFileIds: st.photos || [],
+          source: "bot",
           note: "",
         });
+        // First check-in fixes the point's coordinates (only if still empty).
+        try { await source().ensurePointLocation(st.pointId, st.lat, st.lng); }
+        catch (e) { console.error("ensurePointLocation error:", e.message); }
         clearState(userId);
         bot.sendMessage(msg.chat.id,
           `✅ *Check-in saved* at *${esc(st.pointName)}*.\n📸 Photos: ${(st.photos || []).length}\n🆔 ${esc(visitId)}\n\nTap /route for the next stop.`,

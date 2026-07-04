@@ -15,11 +15,14 @@
 // `pk` is a bigint identity starting at 2 — it maps to the `row` handle the routes use
 // (the CRUD routes validate row >= 2, a convention inherited from the Sheets store).
 const { getSupabase } = require("../supabaseClient");
+const { phonesMatch } = require("../util");
 
-const T_WORKERS = "starx_workers";
-const T_POINTS  = "starx_points";
-const T_VISITS  = "starx_visits";
-const MAX_ROWS  = 5000;
+const T_WORKERS  = "starx_workers";
+const T_POINTS   = "starx_points";
+const T_VISITS   = "starx_visits";
+const T_SETTINGS = "starx_settings";
+const BUCKET     = "visit-photos";
+const MAX_ROWS   = 5000;
 
 function str(v) { return v == null ? "" : String(v); }
 function isActive(v) {
@@ -30,8 +33,9 @@ function isActive(v) {
 function newId(prefix) { return prefix + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
 function ok(error) { if (error) throw new Error(error.message || String(error)); }
 
-function makeSupabaseSource(/* tenant */) {
+function makeSupabaseSource(tenant) {
   const db = getSupabase;
+  const tenantId = (tenant && tenant.id) || "default";
 
   // Tables are created out-of-band via supabase/schema.sql, so setup is a no-op here.
   // Kept so the "Set up" button in the UI still resolves.
@@ -51,6 +55,7 @@ function makeSupabaseSource(/* tenant */) {
   }
   async function addWorker(f) {
     const { error } = await db().from(T_WORKERS).insert({
+      tenant_id: tenantId,
       telegram_id: str(f.telegramId).trim(),
       name: str(f.name).trim(),
       phone: str(f.phone).trim(),
@@ -74,6 +79,7 @@ function makeSupabaseSource(/* tenant */) {
   }
   async function appendWorkers(rows) {
     const payload = (rows || []).map(r => ({
+      tenant_id: tenantId,
       telegram_id: str(r[0]).trim(),
       name: str(r[1]).trim(),
       phone: str(r[2]).trim(),
@@ -83,6 +89,17 @@ function makeSupabaseSource(/* tenant */) {
     const { error } = await db().from(T_WORKERS).insert(payload);
     ok(error);
     return payload.length;
+  }
+
+  // Registration (holodBot-style): find a worker by phone, then link their Telegram id.
+  async function findWorkerByPhone(phone) {
+    const workers = await listWorkers();
+    return workers.find(w => phonesMatch(w.phone, phone)) || null;
+  }
+  async function linkWorkerTelegram(row, telegramId) {
+    const { error } = await db().from(T_WORKERS).update({ telegram_id: str(telegramId).trim() }).eq("pk", row);
+    ok(error);
+    return true;
   }
 
   // ── Points ───────────────────────────────────────────────────────────────────
@@ -96,33 +113,49 @@ function makeSupabaseSource(/* tenant */) {
       address: str(r.address).trim(),
       lat: str(r.lat).trim(),
       lng: str(r.lng).trim(),
+      geolocated: r.geolocated === true || !!(str(r.lat).trim() && str(r.lng).trim()),
       active: isActive(r.active),
     }));
   }
   async function addPoint(f) {
     const id = str(f.id).trim() || newId("P");
+    const lat = str(f.lat).trim(), lng = str(f.lng).trim();
     const { error } = await db().from(T_POINTS).insert({
+      tenant_id: tenantId,
       id,
       name: str(f.name).trim(),
       address: str(f.address).trim(),
-      lat: str(f.lat).trim(),
-      lng: str(f.lng).trim(),
+      lat, lng,
+      geolocated: !!(lat && lng),
       active: f.active !== false,
     });
     ok(error);
     return id;
   }
   async function updatePoint(row, f) {
+    const lat = str(f.lat).trim(), lng = str(f.lng).trim();
     const patch = {
       name: str(f.name).trim(),
       address: str(f.address).trim(),
-      lat: str(f.lat).trim(),
-      lng: str(f.lng).trim(),
+      lat, lng,
+      geolocated: !!(lat && lng),
       active: f.active !== false,
     };
     if (str(f.id).trim()) patch.id = str(f.id).trim();
     const { error } = await db().from(T_POINTS).update(patch).eq("pk", row);
     ok(error);
+  }
+  // Set a point's coords the first time it's checked in (only if still empty).
+  async function ensurePointLocation(pointId, lat, lng) {
+    if (!pointId || !lat || !lng) return false;
+    const { data, error } = await db().from(T_POINTS).select("pk,lat,lng").eq("id", pointId).limit(1);
+    ok(error);
+    const p = (data || [])[0];
+    if (!p || (str(p.lat).trim() && str(p.lng).trim())) return false;
+    const { error: uerr } = await db().from(T_POINTS)
+      .update({ lat: str(lat), lng: str(lng), geolocated: true }).eq("pk", p.pk);
+    ok(uerr);
+    return true;
   }
   async function deletePoint(row) {
     const { error, count } = await db().from(T_POINTS).delete({ count: "exact" }).eq("pk", row);
@@ -130,14 +163,18 @@ function makeSupabaseSource(/* tenant */) {
     return count || 0;
   }
   async function appendPoints(rows) {
-    const payload = (rows || []).map(r => ({
-      id: str(r[0]).trim() || newId("P"),
-      name: str(r[1]).trim(),
-      address: str(r[2]).trim(),
-      lat: str(r[3]).trim(),
-      lng: str(r[4]).trim(),
-      active: true,
-    })).filter(r => r.name || r.address);
+    const payload = (rows || []).map(r => {
+      const lat = str(r[3]).trim(), lng = str(r[4]).trim();
+      return {
+        tenant_id: tenantId,
+        id: str(r[0]).trim() || newId("P"),
+        name: str(r[1]).trim(),
+        address: str(r[2]).trim(),
+        lat, lng,
+        geolocated: !!(lat && lng),
+        active: true,
+      };
+    }).filter(r => r.name || r.address);
     if (!payload.length) return 0;
     const { error } = await db().from(T_POINTS).insert(payload);
     ok(error);
@@ -163,12 +200,14 @@ function makeSupabaseSource(/* tenant */) {
       mapsLink: str(r.maps_link),
       photoCount: Number(r.photo_count) || 0,
       photoFileIds: str(r.photo_file_ids),
+      source: str(r.source) || "bot",
       note: str(r.note),
     }));
   }
   async function addVisit(v) {
     const visitId = v.visitId || newId("V");
     const { error } = await db().from(T_VISITS).insert({
+      tenant_id: tenantId,
       timestamp: v.timestamp || new Date().toISOString(),
       visit_id: visitId,
       worker_telegram_id: str(v.workerTelegramId),
@@ -180,17 +219,51 @@ function makeSupabaseSource(/* tenant */) {
       maps_link: str(v.mapsLink),
       photo_count: Number(v.photoCount) || 0,
       photo_file_ids: Array.isArray(v.photoFileIds) ? v.photoFileIds.join(",") : str(v.photoFileIds),
+      source: str(v.source) || "bot",
       note: str(v.note),
     });
     ok(error);
     return visitId;
   }
 
+  // ── Photos (PWA uploads → Storage bucket) ──────────────────────────────────────
+  async function uploadPhoto(buffer, contentType) {
+    const ref = `${tenantId}/${newId("ph")}.jpg`;
+    const { error } = await db().storage.from(BUCKET).upload(ref, buffer, {
+      contentType: contentType || "image/jpeg", upsert: false,
+    });
+    ok(error);
+    return ref;
+  }
+  async function getPhoto(ref) {
+    const { data, error } = await db().storage.from(BUCKET).download(ref);
+    if (error) return null;
+    const buffer = Buffer.from(await data.arrayBuffer());
+    return { buffer, contentType: data.type || "image/jpeg" };
+  }
+
+  // ── Settings (key/value per tenant) ────────────────────────────────────────────
+  async function getSetting(key, def) {
+    const { data, error } = await db().from(T_SETTINGS)
+      .select("value").eq("tenant_id", tenantId).eq("key", key).limit(1);
+    ok(error);
+    const row = (data || [])[0];
+    return row ? str(row.value) : (def == null ? "" : def);
+  }
+  async function setSetting(key, value) {
+    const { error } = await db().from(T_SETTINGS)
+      .upsert({ tenant_id: tenantId, key, value: str(value), updated_at: new Date().toISOString() },
+              { onConflict: "tenant_id,key" });
+    ok(error);
+  }
+
   return {
     ensureSetup,
-    listWorkers, addWorker, updateWorker, deleteWorker, appendWorkers,
-    listPoints, addPoint, updatePoint, deletePoint, appendPoints,
+    listWorkers, addWorker, updateWorker, deleteWorker, appendWorkers, findWorkerByPhone, linkWorkerTelegram,
+    listPoints, addPoint, updatePoint, deletePoint, appendPoints, ensurePointLocation,
     listVisits, addVisit,
+    uploadPhoto, getPhoto,
+    getSetting, setSetting,
   };
 }
 

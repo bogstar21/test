@@ -21,22 +21,73 @@
       background:#fff; color:#000; font-weight:600; font-size:15px; }
     .err { background:rgba(255,80,80,.12); border:1px solid rgba(255,80,80,.4); color:#ff9b9b;
       padding:10px 12px; border-radius:10px; font-size:13px; margin-bottom:16px; }
+    .tabs { display:flex; gap:8px; margin:0 0 20px; }
+    .tab { flex:1; padding:9px; border-radius:10px; border:1px solid rgba(255,255,255,.14);
+      background:#161616; color:#9aa0a6; font-size:14px; cursor:pointer; }
+    .tab.on { background:#fff; color:#000; font-weight:600; border-color:#fff; }
+    .hide { display:none; }
   </style>
 </head>
 <body>
-  <form class="box" method="POST" action="/auth/login" id="form">
+  <div class="box">
     <h1 class="brand">⭐ StarX</h1>
     <p class="sub">Logistics check-in platform</p>
+
+    <div class="tabs">
+      <button type="button" class="tab on" id="tab-mgr">Manager</button>
+      <button type="button" class="tab" id="tab-wrk">Worker</button>
+    </div>
+
     <div class="err" id="err" style="display:none">Wrong password. Try again.</div>
-    <label for="password">Password</label>
-    <input type="password" id="password" name="password" autocomplete="current-password" autofocus required>
-    <button type="submit">Sign in</button>
-  </form>
+    <div class="err" id="werr" style="display:none"></div>
+
+    <!-- Manager: password -->
+    <form method="POST" action="/auth/login" id="form">
+      <label for="password">Password</label>
+      <input type="password" id="password" name="password" autocomplete="current-password" required>
+      <button type="submit">Sign in</button>
+    </form>
+
+    <!-- Worker: phone (PWA check-in) -->
+    <form id="wform" class="hide">
+      <label for="phone">Your phone number</label>
+      <input type="tel" id="phone" name="phone" autocomplete="tel" placeholder="+34 600 123 456">
+      <button type="submit">Enter</button>
+    </form>
+  </div>
+
   <script>
     var p = new URLSearchParams(location.search);
     if (p.get("e")) document.getElementById("err").style.display = "block";
     var next = p.get("next");
     if (next) document.getElementById("form").action = "/auth/login?next=" + encodeURIComponent(next);
+
+    var tabM = document.getElementById("tab-mgr"), tabW = document.getElementById("tab-wrk");
+    var fM = document.getElementById("form"), fW = document.getElementById("wform");
+    var eM = document.getElementById("err"), eW = document.getElementById("werr");
+    function pick(worker) {
+      tabW.classList.toggle("on", worker); tabM.classList.toggle("on", !worker);
+      fW.classList.toggle("hide", !worker); fM.classList.toggle("hide", worker);
+      eM.style.display = "none"; eW.style.display = "none";
+    }
+    tabM.onclick = function () { pick(false); document.getElementById("password").focus(); };
+    tabW.onclick = function () { pick(true); document.getElementById("phone").focus(); };
+
+    fW.addEventListener("submit", async function (e) {
+      e.preventDefault();
+      eW.style.display = "none";
+      var phone = document.getElementById("phone").value.trim();
+      if (!phone) return;
+      try {
+        var res = await fetch("/auth/worker", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ phone: phone }),
+        });
+        var data = await res.json().catch(function () { return {}; });
+        if (!res.ok) { eW.textContent = data.detail || "Could not sign in."; eW.style.display = "block"; return; }
+        location.href = "/platform";
+      } catch (err) { eW.textContent = "Network error. Try again."; eW.style.display = "block"; }
+    });
   </script>
 </body>
 </html>

@@ -14,6 +14,8 @@ const { mountPointRoutes }    = require("./routes/points");
 const { mountWorkerRoutes }   = require("./routes/workers");
 const { mountVisitRoutes }    = require("./routes/visits");
 const { mountImportRoutes }   = require("./routes/import");
+const { mountConnectRoutes }  = require("./routes/connect");
+const { mountCheckinRoutes }  = require("./routes/checkin");
 const { mountBotRoutes }      = require("./routes/bot");
 
 function createApp(deps = {}) {
@@ -28,7 +30,7 @@ function createApp(deps = {}) {
   // Body parsing. Small 2 MB JSON for most routes; the import endpoints declare their
   // own 50 MB parser for base64 uploads, so skip the global parser on those paths.
   const smallJson = express.json({ limit: "2mb" });
-  const UPLOAD_PATHS = /^\/api\/import\/(?:parse|points|workers)$/;
+  const UPLOAD_PATHS = /^\/api\/(?:import\/(?:parse|points|workers)|checkin)$/;
   app.use((req, res, next) => (UPLOAD_PATHS.test(req.path) ? next() : smallJson(req, res, next)));
   app.use(express.urlencoded({ extended: false })); // login form posts
   app.use(cookieParser());
@@ -43,12 +45,19 @@ function createApp(deps = {}) {
   // Static assets (CSS/JS/icons) — revalidate each load so a deploy never serves stale.
   app.use("/platform/assets", express.static(path.join(config.PUBLIC_DIR, "platform", "assets"), { maxAge: 0 }));
 
+  // Connector first: it has its OWN credential (X-API-Key). It must be mounted before
+  // any router that attaches requireAuth at the "/api" mount point, because router-level
+  // middleware runs for every path under its mount — otherwise /api/v1/* would hit a
+  // session gate and 401 before ever reaching the API-key check.
+  mountConnectRoutes(app);      // /api/v1/* (client-facing connector, X-API-Key)
+
   mountAuthRoutes(app);         // /auth/login, /auth/logout
   mountPlatformRoutes(app);     // /platform, /platform/login, /api/me, /api/setup
   mountPointRoutes(app);        // /api/points   CRUD
   mountWorkerRoutes(app);       // /api/workers  CRUD
   mountVisitRoutes(app);        // /api/visits, /api/stats
   mountImportRoutes(app);       // /api/import/*
+  mountCheckinRoutes(app);      // /api/checkin (worker PWA)
   mountBotRoutes(app);          // /api/bot/status, /start, /stop
   mountPublicRoutes(app, deps); // /health, /
 

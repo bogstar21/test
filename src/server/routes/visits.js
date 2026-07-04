@@ -28,13 +28,23 @@ function mountVisitRoutes(app) {
   // Needs the bot to be running (that's who holds the token) — returns 409 if it's off.
   r.get("/visits/:visitId/photo/:idx", async (req, res) => {
     try {
-      const visits = await ds(req).listVisits({ limit: 5000 });
+      const source = ds(req);
+      const visits = await source.listVisits({ limit: 5000 });
       const visit = visits.find(v => String(v.visitId) === String(req.params.visitId));
       if (!visit) return res.status(404).json({ error: "visit_not_found" });
 
       const ids = String(visit.photoFileIds || "").split(",").map(s => s.trim()).filter(Boolean);
       const fileId = ids[parseInt(req.params.idx, 10) || 0];
       if (!fileId) return res.status(404).json({ error: "photo_not_found" });
+
+      // PWA photos live in the datasource photo store (Supabase Storage), not Telegram.
+      if (visit.source === "pwa") {
+        const photo = await source.getPhoto(fileId);
+        if (!photo) return res.status(404).json({ error: "photo_not_found" });
+        res.set("Content-Type", photo.contentType || "image/jpeg");
+        res.set("Cache-Control", "private, max-age=3600");
+        return res.send(photo.buffer);
+      }
 
       let link;
       try {

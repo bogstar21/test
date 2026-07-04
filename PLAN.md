@@ -20,10 +20,16 @@ check-in, PWA shell) but strips the entire cooler/equipment domain.
                 ┌─────────────────────────────────────────────────────┐
                 │  DATASOURCE SEAM   (src/server/datasource/index.js)  │
                 │   forTenant(tenant) → impl                           │
-                │   ├── sheets.js   ✅ now  (Google Sheets)            │
-                │   ├── (excel = import INTO sheets)  ✅ now           │
-                │   └── api.js      ⏳ later (client REST API)         │
+                │   ├── memory.js   ✅ default (zero-config MVP)       │
+                │   ├── supabase.js ✅ persistent (Postgres + Storage) │
+                │   ├── sheets.js   ✅ Google Sheets                   │
+                │   └── (excel/csv import + /api/v1 connector) ✅      │
                 └─────────────────────────────────────────────────────┘
+
+   Client  ───► POST /api/v1/workers · /api/v1/points   (push, X-API-Key)
+   (API)   ◄─── GET  /api/v1/visits                     (pull)
+
+   Worker  ───► PWA check-in  (public/platform, role=worker, login by phone)
                                                                ▲
                 ┌─────────────────────────────────────────┐   │  reads/writes
    Manager ───► │  Web platform  (public/platform, SPA)    │ ──┘
@@ -41,11 +47,16 @@ Nothing else changes.
 
 ## 2. Data model (4 entities — Sheets tabs now, tables later)
 
-| Tab       | Columns                                                                              |
+| Tab / table | Columns                                                                            |
 |-----------|--------------------------------------------------------------------------------------|
 | `workers` | telegramId · name · phone · active                                                   |
-| `points`  | id · name · address · lat · lng · active                                             |
-| `visits`  | timestamp · visitId · workerTelegramId · workerName · pointId · pointName · lat · lng · mapsLink · photoCount · photoFileIds · note |
+| `points`  | id · name · address · lat · lng · **geolocated** · active                            |
+| `visits`  | timestamp · visitId · workerTelegramId · workerName · pointId · pointName · lat · lng · mapsLink · photoCount · photoFileIds · **source** · note |
+| `settings`| tenant_id · key · value   (e.g. `pwa_enabled`)                                       |
+
+All tables carry a `tenant_id` (default `default`) — the multi-tenant seam is ready
+but inactive. Points load **without** coordinates; `geolocated` flips to true on the
+first check-in. `source` marks each visit as `bot` or `pwa`.
 
 `Route` (ordered points per worker per day) is intentionally **deferred** — for the
 MVP a worker simply sees all active points. Add a `routes` tab when a client needs it.
@@ -54,26 +65,25 @@ MVP a worker simply sees all active points. Add a `routes` tab when a client nee
 
 ## 3. Phases (ship each before starting the next)
 
-### Phase 1 — MVP (this scaffold)
-- One tenant. Data in one Google Sheet (`workers`, `points`, `visits`).
-- **Bot:** `/route` lists points → worker checks in (GPS + photos) → Visit row written.
-- **Platform:** login, dashboard (stats + map), CRUD for points & workers, visits table.
-- **Onboarding:** Excel/CSV import of points & workers into the sheet.
+### Phase 1 — MVP ✅ (built)
+- Single company. Datasource: `memory` (default) / `supabase` (persistent) / `sheets`.
+- **Bot (one shared):** `/start` → register by phone → `/route` → check in (GPS + photos).
+  Token lives in server env only; the web app toggles the bot on/off.
+- **Worker PWA:** login by phone, browser GPS + photo → `/api/checkin` (source=`pwa`).
+  Manager enables/disables it from the UI (`pwa_enabled` setting).
+- **Points without coordinates:** first check-in fixes each point's location.
+- **Connector API** (`/api/v1`, `X-API-Key`): client pushes workers/points, pulls visits.
+- **Platform:** login, dashboard (stats + map), CRUD, visits table, Excel/CSV import.
 
-### Phase 2 — Multi-tenant
-- Multiple companies, each its own password + sheet (the `TENANTS` seam already exists).
-- Per-tenant bot routing (one bot, workers keyed by tenant) or one bot per tenant.
+### Phase 2 — Multi-tenant (seam ready, inactive)
+- Every table already carries `tenant_id`; `TENANTS[]` + `getTenant(req)` exist.
+- Activate multiple companies, each its own password + datasource + connector key.
 
-### Phase 3 — Bring-your-own data
-- `datasource/api.js`: read points/workers and push visits to a client's REST API.
-- Tenant config gains `source: "api" | "sheets"`; routes/bot stay unchanged (seam).
+### Phase 3 — Scale / integrations
+- Add `datasource/postgres.js` or a direct client REST `datasource/api.js` behind the
+  same interface — routes and bot stay unchanged (seam).
 
-### Phase 4 — Scale the store
-- Move from Sheets → Postgres when a tenant exceeds ~5k visits or needs concurrency.
-- Same datasource interface → add `datasource/postgres.js`, flip the tenant flag.
-
-### Phase 5 — Delivery upgrades
-- PWA "worker app" (installable) as an alternative to Telegram.
+### Phase 4 — Delivery upgrades
 - Geofence on check-in (reject if > N m from the point), offline queue, native app.
 
 ---
@@ -81,11 +91,13 @@ MVP a worker simply sees all active points. Add a `routes` tab when a client nee
 ## 4. Tech stack (same as holodBot — proven, minimal)
 
 - **Node + Express** server (helmet, rate-limit, signed-cookie sessions).
-- **Telegram** (`node-telegram-bot-api`, long-polling) for the worker app.
-- **Google Sheets** (`googleapis`, service account) as the first datastore.
+- **Telegram** (`node-telegram-bot-api`, long-polling) — one shared worker bot.
+- **Supabase** (Postgres + REST + Storage) as the persistent datastore; `memory` for
+  zero-config dev; Google Sheets (`googleapis`) still supported via the seam.
 - **SheetJS** (`xlsx`) for Excel/CSV import.
-- **Vanilla JS PWA** for the platform (Leaflet for the map). No build step.
-- **Railway** for deploy (git push → redeploy). Own service, own env, own sheet.
+- **Vanilla JS PWA** for both the manager platform and the worker check-in (Leaflet
+  for the map). No build step.
+- **Railway** for deploy (git push → redeploy). Own service, own env.
 
 ---
 

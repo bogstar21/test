@@ -8,7 +8,7 @@
   <link rel="icon" href="/platform/assets/icon.svg">
   <link rel="manifest" href="/platform/manifest.webmanifest">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-  <link rel="stylesheet" href="/platform/assets/app.css?v=4">
+  <link rel="stylesheet" href="/platform/assets/app.css?v=5">
   <script>
     // Apply saved theme before first paint (default light).
     (function () { try { if (localStorage.getItem('starx-theme') === 'dark') document.documentElement.classList.add('dark'); } catch (e) {} })();
@@ -161,24 +161,16 @@
           </div>
         </div>
 
-        <div class="card card-pad admin-only mt" id="bot-token-card">
-          <h3><svg class="ic"><use href="#i-send"/></svg> Conectar un bot</h3>
-          <p class="desc">Pega el token que te dio BotFather y pulsa <b>Encender bot</b>. Se activa al momento — sin reiniciar nada.</p>
-          <div class="field">
-            <label>Token de BotFather</label>
-            <input id="bot-token" type="password" placeholder="123456789:AA...tu-token-aquí" autocomplete="off">
-          </div>
-        </div>
-
         <div class="card card-pad mt">
-          <h3><svg class="ic"><use href="#i-check"/></svg> Cómo obtener un token (30 segundos, una vez)</h3>
+          <h3><svg class="ic"><use href="#i-check"/></svg> Cómo registran tus trabajadores</h3>
+          <p class="desc">StarX usa <b>un único bot compartido</b>, ya configurado por la plataforma. Tú solo lo enciendes o apagas aquí — no hay tokens que gestionar.</p>
           <ol class="muted" style="margin:8px 0 0; padding-left:20px; line-height:1.9">
-            <li>Abre Telegram y escribe a <a href="https://t.me/BotFather" target="_blank" rel="noopener">@BotFather</a>.</li>
-            <li>Envía <code>/newbot</code> y sigue los pasos (nombre + usuario).</li>
-            <li>Copia el token que te da (tipo <code>123456789:AA...</code>).</li>
-            <li>Pégalo arriba y pulsa <b>Encender bot</b>.</li>
+            <li>Carga a tus trabajadores con su <b>teléfono</b> (en <b>Trabajadores</b> o por importación/API).</li>
+            <li>El trabajador abre el bot y pulsa <code>/start</code>.</li>
+            <li>Comparte su número de teléfono y queda enlazado automáticamente.</li>
+            <li>Pulsa <code>/route</code>, elige una parada y hace su check-in con ubicación y foto.</li>
           </ol>
-          <p class="muted" style="margin-top:12px">Tus trabajadores nunca tocan BotFather — solo abren el bot y pulsan <code>/route</code>. Añádelos en <b>Trabajadores</b> con su ID de Telegram.</p>
+          <p class="muted" style="margin-top:12px">Si el botón <b>Encender bot</b> aparece deshabilitado, el operador de la plataforma aún no ha configurado el token del bot en el servidor.</p>
         </div>
       </section>
 
@@ -204,9 +196,100 @@
         </div>
 
         <div class="card card-pad mt">
+          <h3><svg class="ic"><use href="#i-globe"/></svg> App de check-in (PWA)</h3>
+          <p class="desc">Permite que tus trabajadores hagan check-in desde el navegador (además del bot). Entran en la pantalla de login con su <b>teléfono</b> (el mismo que cargaste).</p>
+          <div class="deploy-head">
+            <span class="dh-ic"><svg class="ic"><use href="#i-globe"/></svg></span>
+            <div><div class="dh-t">Estado</div><div class="dh-d" id="pwa-status">Comprobando…</div></div>
+          </div>
+          <div class="toolbar">
+            <button class="btn admin-only" id="pwa-toggle"><svg class="ic"><use href="#i-power"/></svg> Activar PWA</button>
+          </div>
+        </div>
+
+        <div class="card card-pad mt">
+          <h3><svg class="ic"><use href="#i-send"/></svg> Conexión por API (conector)</h3>
+          <p class="desc">El cliente empuja su catálogo y lee las visitas por API. Se autentica con la cabecera <code>X-API-Key</code>. Estado: <b id="conn-status">…</b></p>
+          <p class="muted" id="conn-hint" style="margin-top:4px"></p>
+          <div class="field">
+            <label>Cargar trabajadores — <code>POST /api/v1/workers</code></label>
+            <pre class="code-block"><code>{
+  "workers": [
+    { "name": "Ivan Petrenko", "phone": "+380671112233" },
+    { "name": "Olena Kovalenko", "phone": "+380677654321" }
+  ]
+}</code></pre>
+          </div>
+          <div class="field">
+            <label>Cargar puntos (sin coordenadas) — <code>POST /api/v1/points</code></label>
+            <pre class="code-block"><code>{
+  "points": [
+    { "id": "P1", "name": "Silpo Khreshchatyk", "address": "Khreshchatyk St 15, Kyiv" },
+    { "name": "ATB Podil", "address": "Verkhnii Val St 24, Kyiv" }
+  ]
+}</code></pre>
+            <p class="muted">Las coordenadas se rellenan solas en el <b>primer check-in</b> de cada punto.</p>
+          </div>
+          <div class="field">
+            <label>Leer visitas — <code>GET /api/v1/visits?limit=500</code></label>
+            <pre class="code-block"><code>curl -H "X-API-Key: TU_CLAVE" \
+  https://TU-DOMINIO/api/v1/visits?limit=500</code></pre>
+          </div>
+        </div>
+
+        <div class="card card-pad mt">
           <h3><svg class="ic"><use href="#i-sheet"/></svg> Preparar un Google Sheet</h3>
           <p class="desc">Crea las pestañas <code>workers</code>, <code>points</code> y <code>visits</code> (con cabeceras) en tu hoja conectada. Se puede ejecutar de nuevo sin riesgo — nunca borra datos.</p>
           <button class="btn ghost admin-only" id="setup-btn"><svg class="ic"><use href="#i-sheet"/></svg> Configurar hoja</button>
+        </div>
+
+        <div class="card card-pad mt">
+          <h3><svg class="ic"><use href="#i-import"/></svg> Estructura del Excel/CSV</h3>
+          <p class="desc">Puedes usar cualquier cabecera — al importar asignas cada columna. Ejemplos recomendados:</p>
+          <div class="field">
+            <label>Puntos</label>
+            <pre class="code-block"><code>id,name,address
+P1,Silpo Khreshchatyk,Khreshchatyk St 15
+,ATB Podil,Verkhnii Val St 24</code></pre>
+          </div>
+          <div class="field">
+            <label>Trabajadores</label>
+            <pre class="code-block"><code>name,phone
+Ivan Petrenko,+380671112233
+Olena Kovalenko,+380677654321</code></pre>
+          </div>
+        </div>
+      </section>
+
+      <!-- ══════════════════ CHECK-IN (TRABAJADOR / PWA) ══════════════════ -->
+      <section class="view" id="view-checkin">
+        <div class="view-head">
+          <div><h1 class="h1">Hacer check-in</h1><p class="lead" id="ci-hello">Elige tu parada, comparte tu ubicación y añade una foto.</p></div>
+        </div>
+
+        <div class="card card-pad">
+          <div class="field">
+            <label>Parada</label>
+            <select id="ci-point"><option value="">Cargando paradas…</option></select>
+          </div>
+
+          <div class="field">
+            <label>Ubicación</label>
+            <button class="btn ghost" type="button" id="ci-geo"><svg class="ic"><use href="#i-pin"/></svg> Usar mi ubicación</button>
+            <p class="muted" id="ci-geo-status" style="margin-top:8px">Aún no capturada.</p>
+          </div>
+
+          <div class="field">
+            <label>Foto (opcional)</label>
+            <input type="file" id="ci-photo" accept="image/*" capture="environment">
+          </div>
+
+          <div class="field">
+            <label>Nota (opcional)</label>
+            <input id="ci-note" placeholder="Comentario breve">
+          </div>
+
+          <button class="btn" id="ci-submit"><svg class="ic"><use href="#i-check"/></svg> Enviar check-in</button>
         </div>
       </section>
 
@@ -235,6 +318,6 @@
   <div class="toast" id="toast"></div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script src="/platform/assets/app.js?v=4"></script>
+  <script src="/platform/assets/app.js?v=5"></script>
 </body>
 </html>

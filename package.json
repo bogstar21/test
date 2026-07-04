@@ -5,7 +5,8 @@
   "main": "bot.js",
   "scripts": {
     "start": "node src/server/index.js",
-    "bot": "node bot.js"
+    "bot": "node bot.js",
+    "test": "node test/server_smoke.js"
   },
   "license": "ISC",
   "type": "commonjs",

@@ -87,7 +87,8 @@
     else if (v === "workers") loadWorkers();
     else if (v === "visits") loadVisits();
     else if (v === "bot") loadBot();
-    else if (v === "import") renderMapping();
+    else if (v === "import") { renderMapping(); loadSettings(); }
+    else if (v === "checkin") loadCheckin();
   }
 
   // ── Dashboard ────────────────────────────────────────────────────────────────
@@ -198,10 +199,13 @@
       var data = await api("/api/points");
       state.points = data.points;
       if (!data.points.length) { wrap.innerHTML = '<div class="card card-pad"><div class="empty">Aún no hay puntos. Añade uno o importa desde Excel.</div></div>'; return; }
-      var heads = ["Nombre", "Dirección", "Lat", "Lng", "Estado"];
+      var heads = ["Nombre", "Dirección", "Geo", "Lat", "Lng", "Estado"];
       if (state.isAdmin) heads.push("Acciones");
       wrap.innerHTML = tableWrap(heads, data.points.map(function (p) {
-        return '<tr><td data-label="Nombre">' + esc(p.name) + '</td><td data-label="Dirección" class="muted">' + esc(p.address) + '</td><td data-label="Lat" class="mono">' + esc(p.lat) + '</td><td data-label="Lng" class="mono">' + esc(p.lng) + '</td><td data-label="Estado">' + statusPill(p.active) + "</td>" +
+        var geo = p.geolocated
+          ? '<span class="pill on">sí</span>'
+          : '<span class="pill off">pendiente</span>';
+        return '<tr><td data-label="Nombre">' + esc(p.name) + '</td><td data-label="Dirección" class="muted">' + esc(p.address) + '</td><td data-label="Geo">' + geo + '</td><td data-label="Lat" class="mono">' + esc(p.lat) + '</td><td data-label="Lng" class="mono">' + esc(p.lng) + '</td><td data-label="Estado">' + statusPill(p.active) + "</td>" +
           (state.isAdmin ? '<td data-label="Acciones"><div class="tbl-actions"><button class="btn ghost sm" data-edit-point="' + p.row + '">Editar</button><button class="btn danger sm" data-del-point="' + p.row + '">Borrar</button></div></td>' : "") +
           "</tr>";
       }).join(""), true);
@@ -304,19 +308,23 @@
   }
   function renderBot(s) {
     var on = !!(s && s.running);
+    var configured = !(s && s.configured === false); // undefined (start/stop responses) → assume ok
     var pill = $("#bot-pill");
     pill.className = "pill " + (on ? "on" : "off");
     pill.textContent = on ? "en línea" : "apagado";
     if (on) {
-      var uname = s.username ? ("@" + esc(s.username)) : "tu bot";
+      var uname = s.username ? ("@" + esc(s.username)) : "el bot";
       var link = s.username ? ' — <a href="https://t.me/' + esc(s.username) + '" target="_blank" rel="noopener">abrir ' + uname + " ↗</a>" : "";
       $("#bot-status").innerHTML = "El bot <b>" + uname + "</b> está en línea recibiendo check-ins." + link;
+    } else if (!configured) {
+      $("#bot-status").textContent = "El bot aún no está configurado en el servidor (falta TELEGRAM_TOKEN).";
     } else {
-      $("#bot-status").textContent = "El bot está apagado. Pega un token abajo y enciéndelo.";
+      $("#bot-status").textContent = "El bot está apagado. Pulsa «Encender bot» para activarlo.";
     }
-    $("#bot-start").classList.toggle("hidden", on || !state.isAdmin);
+    var startBtn = $("#bot-start");
+    startBtn.classList.toggle("hidden", on || !state.isAdmin);
+    startBtn.disabled = !configured;
     $("#bot-stop").classList.toggle("hidden", !on || !state.isAdmin);
-    $("#bot-token-card").classList.toggle("hidden", on || !state.isAdmin);
     setBadge(on);
   }
   async function loadBot() {
@@ -324,12 +332,9 @@
     catch (e) { $("#bot-status").textContent = e.message; }
   }
   async function startBot() {
-    var token = ($("#bot-token").value || "").trim();
-    if (!token) { toast("Pega primero tu token de BotFather.", true); return; }
     var btn = $("#bot-start"); btn.disabled = true; btn.textContent = "Encendiendo…";
     try {
-      var s = await api("/api/bot/start", { method: "POST", body: JSON.stringify({ token: token }) });
-      $("#bot-token").value = "";
+      var s = await api("/api/bot/start", { method: "POST" });
       toast(s.username ? ("Bot @" + s.username + " en línea") : "Bot encendido");
       renderBot(s);
     } catch (e) { toast(e.message, true); }
@@ -388,8 +393,93 @@
     });
   }
 
+  // ── Check-in (worker PWA) ──────────────────────────────────────────────────────
+  var checkin = { lat: "", lng: "" };
+  async function loadCheckin() {
+    var sel = $("#ci-point");
+    try {
+      var data = await api("/api/points");
+      var active = (data.points || []).filter(function (p) { return p.active; });
+      if (!active.length) { sel.innerHTML = '<option value="">No hay paradas asignadas</option>'; return; }
+      sel.innerHTML = active.map(function (p) {
+        return '<option value="' + esc(p.id) + '">' + esc(p.name || p.address || p.id) + "</option>";
+      }).join("");
+    } catch (e) { sel.innerHTML = '<option value="">' + esc(e.message) + "</option>"; }
+  }
+  function captureLocation() {
+    var st = $("#ci-geo-status");
+    if (!navigator.geolocation) { st.textContent = "Este dispositivo no permite geolocalización."; return; }
+    st.textContent = "Obteniendo ubicación…";
+    navigator.geolocation.getCurrentPosition(function (pos) {
+      checkin.lat = String(pos.coords.latitude);
+      checkin.lng = String(pos.coords.longitude);
+      st.textContent = "✅ Ubicación capturada (" + checkin.lat.slice(0, 8) + ", " + checkin.lng.slice(0, 8) + ").";
+    }, function () {
+      st.textContent = "No se pudo obtener la ubicación. Permite el acceso e inténtalo de nuevo.";
+    }, { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 });
+  }
+  async function submitCheckin() {
+    var pointId = $("#ci-point").value;
+    if (!pointId) { toast("Elige una parada.", true); return; }
+    if (!checkin.lat || !checkin.lng) { toast("Captura tu ubicación primero.", true); return; }
+    var btn = $("#ci-submit"); btn.disabled = true; btn.textContent = "Enviando…";
+    try {
+      var body = { pointId: pointId, lat: checkin.lat, lng: checkin.lng, note: $("#ci-note").value || "" };
+      var file = $("#ci-photo").files[0];
+      if (file) { body.photo = await fileToB64(file); body.photoContentType = file.type || "image/jpeg"; }
+      await api("/api/checkin", { method: "POST", body: JSON.stringify(body) });
+      toast("✅ Check-in enviado");
+      checkin = { lat: "", lng: "" };
+      $("#ci-photo").value = ""; $("#ci-note").value = "";
+      $("#ci-geo-status").textContent = "Aún no capturada.";
+    } catch (e) { toast(e.message, true); }
+    finally { btn.disabled = false; btn.innerHTML = '<svg class="ic"><use href="#i-check"/></svg> Enviar check-in'; }
+  }
+
+  // ── Settings (PWA toggle + connector status) ─────────────────────────────────
+  function renderSettings(s) {
+    var pwaOn = !!(s && s.pwaEnabled);
+    var ps = $("#pwa-status");
+    if (ps) ps.innerHTML = pwaOn
+      ? '<span class="dot dot-ok"></span> Activa — los trabajadores pueden entrar por teléfono.'
+      : '<span class="dot dot-muted"></span> Desactivada.';
+    var pt = $("#pwa-toggle");
+    if (pt) pt.innerHTML = '<svg class="ic"><use href="#i-power"/></svg> ' + (pwaOn ? "Desactivar PWA" : "Activar PWA");
+
+    var connOn = !!(s && s.connectorEnabled);
+    var cs = $("#conn-status");
+    if (cs) cs.textContent = connOn ? "activo" : "desactivado";
+    var ch = $("#conn-hint");
+    if (ch) ch.textContent = connOn
+      ? "El conector acepta peticiones con tu clave X-API-Key."
+      : "Para activarlo, define INTEGRATION_API_KEY en el servidor y vuelve a desplegar.";
+  }
+  async function loadSettings() {
+    try { renderSettings(await api("/api/settings")); }
+    catch (e) { /* ignore for non-critical panel */ }
+  }
+  async function togglePwa() {
+    var btn = $("#pwa-toggle"); btn.disabled = true;
+    try {
+      var cur = await api("/api/settings");
+      var next = await api("/api/settings", { method: "POST", body: JSON.stringify({ pwaEnabled: !cur.pwaEnabled }) });
+      renderSettings(next);
+      toast(next.pwaEnabled ? "PWA activada" : "PWA desactivada");
+    } catch (e) { toast(e.message, true); }
+    finally { btn.disabled = false; }
+  }
+
   // ── Wire up ──────────────────────────────────────────────────────────────────
   function applyAdmin() { $$(".admin-only").forEach(function (el) { el.classList.toggle("hidden", !state.isAdmin); }); }
+
+  // Worker sessions get a stripped-down app: only the check-in view, no manager nav.
+  function applyWorkerMode() {
+    document.body.classList.add("worker-mode");
+    $$(".nav").forEach(function (t) { t.classList.add("hidden"); });
+    $("#bot-badge").classList.add("hidden");
+    var nt = $("#nav-toggle"); if (nt) nt.classList.add("hidden");
+    var side = $("#side-nav"); if (side) side.classList.add("hidden");
+  }
 
   function toggleTheme() {
     var dark = document.documentElement.classList.toggle("dark");
@@ -455,7 +545,13 @@
     // Bot
     $("#bot-start").onclick = startBot;
     $("#bot-stop").onclick = stopBot;
-    $("#bot-token").addEventListener("keydown", function (e) { if (e.key === "Enter") startBot(); });
+
+    // Check-in (worker PWA)
+    $("#ci-geo").onclick = captureLocation;
+    $("#ci-submit").onclick = submitCheckin;
+
+    // Settings (PWA toggle)
+    var pwaBtn = $("#pwa-toggle"); if (pwaBtn) pwaBtn.onclick = togglePwa;
 
     // Import
     $("#imp-target").onchange = renderMapping;
@@ -491,6 +587,15 @@
       state.role = me.role; state.isAdmin = me.role === "admin";
     } catch (e) { /* api() already redirects on 401 */ }
     applyAdmin();
+
+    // Workers land straight on the check-in screen with a stripped-down UI.
+    if (state.role === "worker") {
+      applyWorkerMode();
+      var hello = $("#ci-hello");
+      if (hello && state.role) hello.textContent = "Hola" + ($("#user").textContent ? ", " + $("#user").textContent : "") + ". Elige tu parada, comparte tu ubicación y añade una foto.";
+      showView("checkin");
+      return;
+    }
 
     loadDashboard();
   }
