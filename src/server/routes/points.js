@@ -11,7 +11,7 @@ function fail(res, e) { console.error("/api/points error:", e && e.message); res
 
 function sanitize(b) {
   b = b || {};
-  return {
+  const s = {
     id:      clean(b.id),
     name:    clean(b.name),
     address: clean(b.address),
@@ -19,6 +19,12 @@ function sanitize(b) {
     lng:     clean(b.lng),
     active:  !(b.active === false || b.active === "0" || b.active === "false"),
   };
+  // Worker assignment (1:1). The UI sends the worker's internal id in `workerId`;
+  // a phone reference is also accepted. Only include the key when the caller sent it
+  // so updatePoint can tell "leave assignment as-is" from "unassign" (empty string).
+  if (b.workerId != null)    s.workerId    = clean(b.workerId);
+  if (b.workerPhone != null) s.workerPhone = clean(b.workerPhone);
+  return s;
 }
 
 function mountPointRoutes(app) {
@@ -33,6 +39,27 @@ function mountPointRoutes(app) {
     const f = sanitize(req.body);
     if (!f.name && !f.address) return res.status(400).json({ error: "Name or address required." });
     try { const id = await ds(req).addPoint(f); res.json({ ok: true, id }); } catch (e) { fail(res, e); }
+  });
+
+  // Bulk (re)assign several points to one worker in a single call. Body:
+  //   { rows: [<row>, ...], workerId: "<id>" }   (workerId "" = unassign)
+  r.post("/assign", requireRole("admin"), async (req, res) => {
+    const body = req.body || {};
+    const rows = Array.isArray(body.rows) ? body.rows : [];
+    const workerId = clean(body.workerId); // "" → unassign
+    if (!rows.length) return res.status(400).json({ error: "no_rows" });
+    try {
+      const source = ds(req);
+      const all = await source.listPoints();
+      let updated = 0;
+      for (const row of rows) {
+        const p = all.find(x => String(x.row) === String(row));
+        if (!p) continue;
+        await source.updatePoint(p.row, { id: p.id, name: p.name, address: p.address, lat: p.lat, lng: p.lng, active: p.active, workerId });
+        updated++;
+      }
+      res.json({ ok: true, updated });
+    } catch (e) { fail(res, e); }
   });
 
   r.put("/:row", requireRole("admin"), async (req, res) => {

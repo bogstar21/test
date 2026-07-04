@@ -14,6 +14,7 @@
 create table if not exists public.starx_workers (
   pk           bigint generated always as identity (start with 2) primary key,
   tenant_id    text default 'default',      -- ready for multi-company; single tenant for now
+  worker_id    text default '',             -- stable internal id (auto) that points reference
   telegram_id  text default '',
   name         text default '',
   phone        text default '',
@@ -21,24 +22,29 @@ create table if not exists public.starx_workers (
   created_at   timestamptz default now()
 );
 alter table public.starx_workers add column if not exists tenant_id text default 'default';
+alter table public.starx_workers add column if not exists worker_id text default '';
 
 -- ── Points ─────────────────────────────────────────────────────────────────────
 -- Points are loaded WITHOUT coordinates. The first check-in geolocates the point:
 -- lat/lng get filled and `geolocated` flips to true.
 create table if not exists public.starx_points (
-  pk         bigint generated always as identity (start with 2) primary key,
-  tenant_id  text default 'default',
-  id         text default '',            -- business id (e.g. "P1"), used to match the client's system
-  name       text default '',
-  address    text default '',
-  lat        text default '',
-  lng        text default '',
-  geolocated boolean default false,      -- true once the first check-in set the coords
-  active     boolean default true,
-  created_at timestamptz default now()
+  pk          bigint generated always as identity (start with 2) primary key,
+  tenant_id   text default 'default',
+  id          text default '',            -- business id (e.g. "P1"), used to match the client's system
+  name        text default '',
+  address     text default '',
+  worker_id   text default '',            -- the ONE worker this point is assigned to (1:1)
+  worker_name text default '',            -- denormalized for display
+  lat         text default '',
+  lng         text default '',
+  geolocated  boolean default false,      -- true once the first check-in set the coords
+  active      boolean default true,
+  created_at  timestamptz default now()
 );
-alter table public.starx_points add column if not exists tenant_id  text default 'default';
-alter table public.starx_points add column if not exists geolocated boolean default false;
+alter table public.starx_points add column if not exists tenant_id   text default 'default';
+alter table public.starx_points add column if not exists geolocated  boolean default false;
+alter table public.starx_points add column if not exists worker_id   text default '';
+alter table public.starx_points add column if not exists worker_name text default '';
 
 -- ── Visits (check-ins) ───────────────────────────────────────────────────────────
 -- photo_file_ids holds a comma-separated list. From the bot they are Telegram file_ids;
@@ -79,7 +85,9 @@ create index if not exists idx_starx_visits_tenant     on public.starx_visits (t
 create index if not exists idx_starx_workers_telegram  on public.starx_workers (telegram_id);
 create index if not exists idx_starx_workers_phone     on public.starx_workers (phone);
 create index if not exists idx_starx_workers_tenant    on public.starx_workers (tenant_id);
+create index if not exists idx_starx_workers_wid       on public.starx_workers (worker_id);
 create index if not exists idx_starx_points_tenant     on public.starx_points (tenant_id);
+create index if not exists idx_starx_points_worker     on public.starx_points (worker_id);
 
 -- ── Storage bucket for PWA check-in photos ────────────────────────────────────────
 -- The bot keeps using Telegram file_ids (served via the /api photo proxy); the PWA has

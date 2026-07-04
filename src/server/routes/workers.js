@@ -53,7 +53,16 @@ function mountWorkerRoutes(app) {
   r.delete("/:row", requireRole("admin"), async (req, res) => {
     const row = parseInt(req.params.row, 10);
     if (!(row >= 2)) return res.status(400).json({ error: "bad_row" });
-    try { await ds(req).deleteWorker(row); res.json({ ok: true }); } catch (e) { fail(res, e); }
+    try {
+      const source = ds(req);
+      // Before removing the worker, clear the assignment on their points so none end up
+      // pointing at a worker that no longer exists (which would hide them from every route).
+      const worker = (await source.listWorkers()).find(w => String(w.row) === String(row));
+      await source.deleteWorker(row);
+      let unassigned = 0;
+      if (worker && worker.workerId) unassigned = await source.unassignPointsForWorker(worker.workerId);
+      res.json({ ok: true, unassigned });
+    } catch (e) { fail(res, e); }
   });
 
   app.use("/api/workers", r);

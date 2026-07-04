@@ -3,7 +3,8 @@
 //   POST /api/import/parse   → { headers, rows }     (no write)
 //   POST /api/import/points  → append mapped rows to `points`
 //   POST /api/import/workers → append mapped rows to `workers`
-// Mapped row order — points: [id, name, address, lat, lng]; workers: [telegramId, name, phone].
+// Mapped row order — points: [id, name, address, lat, lng, workerRef]; workers: [telegramId, name, phone].
+// workerRef is a worker phone or internal worker_id, resolved to the assigned worker.
 const express = require("express");
 const XLSX    = require("xlsx");
 const config  = require("../config");

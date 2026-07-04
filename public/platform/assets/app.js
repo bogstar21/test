@@ -36,7 +36,14 @@
   function statusPill(on) { return on ? '<span class="pill on">activo</span>' : '<span class="pill off">inactivo</span>'; }
   function fmtTime(t) { return esc(String(t || "").replace("T", " ").slice(0, 16)); }
 
-  var state = { role: "", isAdmin: false, points: [], workers: [] };
+  var state = { role: "", isAdmin: false, points: [], workers: [], visits: [] };
+  // View-level filters (kept between reloads so search/date survive a refresh).
+  var filters = {
+    pointsQ: "", pointsWorker: "",
+    workersQ: "",
+    visitsQ: "", visitsFrom: "", visitsTo: "",
+  };
+  var selectedPoints = {}; // row → true, for bulk assignment
 
   // ── Modal ────────────────────────────────────────────────────────────────────
   var modalSave = null;
@@ -160,6 +167,26 @@
       dots + xlabels + "</svg>";
   }
 
+  // Daily coverage per worker: X of Y assigned stops done today, plus the pending list.
+  function renderCoverage(list) {
+    var el = $("#coverage");
+    if (!el) return;
+    var rows = (list || []).filter(function (c) { return c.active && c.assigned > 0; });
+    if (!rows.length) { el.innerHTML = '<div class="empty">Aún no hay paradas asignadas a trabajadores.</div>'; return; }
+    rows.sort(function (a, b) { return b.assigned - a.assigned; });
+    el.innerHTML = rows.map(function (c) {
+      var pct = c.assigned ? Math.round((c.visitedToday / c.assigned) * 100) : 0;
+      var pend = c.pending.length
+        ? "Pendiente: " + c.pending.map(function (p) { return esc(p.name); }).join(", ")
+        : "Todo cubierto hoy";
+      return '<div class="bl-row" style="flex-wrap:wrap">' +
+        '<span class="bl-name">' + esc(c.workerName) + '</span>' +
+        '<span class="bl-track"><span class="bl-fill" style="width:' + Math.max(4, pct) + '%"></span></span>' +
+        '<span class="bl-val">' + c.visitedToday + "/" + c.assigned + '</span>' +
+        '<div class="muted" style="flex-basis:100%;margin-top:2px;font-size:12px">' + pend + '</div></div>';
+    }).join("");
+  }
+
   async function loadDashboard() {
     try {
       var s = await api("/api/stats");
@@ -167,8 +194,15 @@
       $("#s-today").textContent   = s.totals.today;
       $("#s-points").textContent  = s.totals.pointsActive;
       $("#s-workers").textContent = s.totals.workersActive;
+      var sub = $("#s-points-sub");
+      if (sub) {
+        var un = s.totals.pointsUnassigned || 0;
+        sub.textContent = un ? (un + " sin asignar") : "paradas a visitar";
+        sub.classList.toggle("warn", un > 0);
+      }
       renderBarlist("#top-workers", s.byWorker);
       renderBarlist("#top-points", s.byPoint);
+      renderCoverage(s.coverage);
       renderVisitsChart(s.recent);
       plotVisits(s.recent);
     } catch (e) { toast(e.message, true); }
@@ -178,9 +212,13 @@
   // ── Points ───────────────────────────────────────────────────────────────────
   function pointForm(p) {
     p = p || {};
+    var opts = '<option value="">— Sin asignar —</option>' + (state.workers || []).map(function (w) {
+      return '<option value="' + esc(w.workerId) + '"' + (String(p.workerId || "") === String(w.workerId) ? " selected" : "") + ">" + esc(w.name || w.phone || w.workerId) + "</option>";
+    }).join("");
     return '' +
       '<div class="field"><label>Nombre</label><input id="f-name" value="' + esc(p.name || "") + '"></div>' +
       '<div class="field"><label>Dirección</label><input id="f-address" value="' + esc(p.address || "") + '"></div>' +
+      '<div class="field"><label>Trabajador asignado</label><select id="f-worker">' + opts + "</select></div>" +
       '<div class="row2">' +
         '<div class="field"><label>Latitud</label><input id="f-lat" value="' + esc(p.lat || "") + '"></div>' +
         '<div class="field"><label>Longitud</label><input id="f-lng" value="' + esc(p.lng || "") + '"></div>' +
@@ -191,25 +229,91 @@
       "</select></div>";
   }
   function pointPayload() {
-    return { name: $("#f-name").value, address: $("#f-address").value, lat: $("#f-lat").value, lng: $("#f-lng").value, active: $("#f-active").value !== "0" };
+    // workerId is always sent (empty = unassign) so the manager can reassign points here.
+    return { name: $("#f-name").value, address: $("#f-address").value, workerId: $("#f-worker").value, lat: $("#f-lat").value, lng: $("#f-lng").value, active: $("#f-active").value !== "0" };
   }
+  // Populate the worker <select> controls (points filter + bulk-assign) from state.workers.
+  function fillWorkerSelects() {
+    var opts = (state.workers || []).map(function (w) {
+      return '<option value="' + esc(w.workerId) + '">' + esc(w.name || w.phone || w.workerId) + "</option>";
+    }).join("");
+    var f = $("#points-worker-filter");
+    if (f) {
+      f.innerHTML = '<option value="">Todos los trabajadores</option><option value="__none__">— Sin asignar —</option>' + opts;
+      f.value = filters.pointsWorker;
+    }
+    var b = $("#points-bulk-worker");
+    if (b) b.innerHTML = '<option value="">— Sin asignar —</option>' + opts;
+  }
+
+  function pointMatches(p) {
+    var q = filters.pointsQ.trim().toLowerCase();
+    if (q) {
+      var hay = (String(p.name || "") + " " + String(p.address || "")).toLowerCase();
+      if (hay.indexOf(q) === -1) return false;
+    }
+    if (filters.pointsWorker === "__none__") return !p.workerId;
+    if (filters.pointsWorker) return String(p.workerId) === String(filters.pointsWorker);
+    return true;
+  }
+
+  function updateBulkbar() {
+    var bar = $("#points-bulkbar");
+    if (!bar || !state.isAdmin) return;
+    var rows = Object.keys(selectedPoints).filter(function (r) { return selectedPoints[r]; });
+    bar.classList.toggle("hidden", rows.length === 0);
+    var cnt = $("#points-bulk-count");
+    if (cnt) cnt.textContent = rows.length + (rows.length === 1 ? " seleccionado" : " seleccionados");
+  }
+
   async function loadPoints() {
-    var wrap = $("#points-wrap");
     try {
       var data = await api("/api/points");
       state.points = data.points;
-      if (!data.points.length) { wrap.innerHTML = '<div class="card card-pad"><div class="empty">Aún no hay puntos. Añade uno o importa desde Excel.</div></div>'; return; }
-      var heads = ["Nombre", "Dirección", "Geo", "Lat", "Lng", "Estado"];
+      // Load workers too so the assign dropdown (and the column below) can name them.
+      try { state.workers = (await api("/api/workers")).workers || state.workers; } catch (e) {}
+      fillWorkerSelects();
+      loadPointsFromState();
+    } catch (e) { $("#points-wrap").innerHTML = '<div class="card card-pad"><div class="empty">' + esc(e.message) + "</div></div>"; }
+  }
+
+  // Re-render the points table from cached state (used by search/filter without a refetch).
+  function loadPointsFromState() {
+    var wrap = $("#points-wrap");
+    try {
+      if (!state.points.length) { wrap.innerHTML = '<div class="card card-pad"><div class="empty">Aún no hay puntos. Añade uno o importa desde Excel.</div></div>'; updateBulkbar(); return; }
+      var rows = state.points.filter(pointMatches);
+      if (!rows.length) { wrap.innerHTML = '<div class="card card-pad"><div class="empty">Ningún punto coincide con el filtro.</div></div>'; updateBulkbar(); return; }
+      var heads = [];
+      if (state.isAdmin) heads.push("");
+      heads = heads.concat(["Nombre", "Dirección", "Trabajador", "Geo", "Lat", "Lng", "Estado"]);
       if (state.isAdmin) heads.push("Acciones");
-      wrap.innerHTML = tableWrap(heads, data.points.map(function (p) {
+      wrap.innerHTML = tableWrap(heads, rows.map(function (p) {
         var geo = p.geolocated
           ? '<span class="pill on">sí</span>'
           : '<span class="pill off">pendiente</span>';
-        return '<tr><td data-label="Nombre">' + esc(p.name) + '</td><td data-label="Dirección" class="muted">' + esc(p.address) + '</td><td data-label="Geo">' + geo + '</td><td data-label="Lat" class="mono">' + esc(p.lat) + '</td><td data-label="Lng" class="mono">' + esc(p.lng) + '</td><td data-label="Estado">' + statusPill(p.active) + "</td>" +
+        var worker = p.workerName ? esc(p.workerName) : '<span class="muted">— sin asignar —</span>';
+        var check = state.isAdmin
+          ? '<td data-label=""><input type="checkbox" class="row-check" data-check-point="' + p.row + '"' + (selectedPoints[p.row] ? " checked" : "") + "></td>"
+          : "";
+        return "<tr>" + check + '<td data-label="Nombre">' + esc(p.name) + '</td><td data-label="Dirección" class="muted">' + esc(p.address) + '</td><td data-label="Trabajador">' + worker + '</td><td data-label="Geo">' + geo + '</td><td data-label="Lat" class="mono">' + esc(p.lat) + '</td><td data-label="Lng" class="mono">' + esc(p.lng) + '</td><td data-label="Estado">' + statusPill(p.active) + "</td>" +
           (state.isAdmin ? '<td data-label="Acciones"><div class="tbl-actions"><button class="btn ghost sm" data-edit-point="' + p.row + '">Editar</button><button class="btn danger sm" data-del-point="' + p.row + '">Borrar</button></div></td>' : "") +
           "</tr>";
       }).join(""), true);
+      updateBulkbar();
     } catch (e) { wrap.innerHTML = '<div class="card card-pad"><div class="empty">' + esc(e.message) + "</div></div>"; }
+  }
+
+  async function bulkAssign() {
+    var rows = Object.keys(selectedPoints).filter(function (r) { return selectedPoints[r]; }).map(Number);
+    if (!rows.length) { toast("Selecciona al menos un punto.", true); return; }
+    var workerId = $("#points-bulk-worker").value;
+    try {
+      var res = await api("/api/points/assign", { method: "POST", body: JSON.stringify({ rows: rows, workerId: workerId }) });
+      toast((res.updated || 0) + (workerId ? " puntos asignados" : " puntos sin asignar"));
+      selectedPoints = {};
+      loadPoints();
+    } catch (e) { toast(e.message, true); }
   }
   function editPoint(row) {
     var p = state.points.filter(function (x) { return x.row === row; })[0];
@@ -227,7 +331,11 @@
   // ── Workers ──────────────────────────────────────────────────────────────────
   function workerForm(w) {
     w = w || {};
+    var widField = w.workerId
+      ? '<div class="field"><label>ID interno (automático)</label><input value="' + esc(w.workerId) + '" readonly disabled></div>'
+      : "";
     return '' +
+      widField +
       '<div class="field"><label>Nombre</label><input id="f-name" value="' + esc(w.name || "") + '"></div>' +
       '<div class="field"><label>ID de Telegram</label><input id="f-tid" value="' + esc(w.telegramId || "") + '" placeholder="solo números"></div>' +
       '<div class="field"><label>Teléfono</label><input id="f-phone" value="' + esc(w.phone || "") + '"></div>' +
@@ -239,16 +347,25 @@
   function workerPayload() {
     return { name: $("#f-name").value, telegramId: $("#f-tid").value, phone: $("#f-phone").value, active: $("#f-active").value !== "0" };
   }
+  function workerMatches(w) {
+    var q = filters.workersQ.trim().toLowerCase();
+    if (!q) return true;
+    var hay = (String(w.name || "") + " " + String(w.phone || "") + " " + String(w.telegramId || "") + " " + String(w.workerId || "")).toLowerCase();
+    return hay.indexOf(q) !== -1;
+  }
   async function loadWorkers() {
     var wrap = $("#workers-wrap");
     try {
       var data = await api("/api/workers");
       state.workers = data.workers;
       if (!data.workers.length) { wrap.innerHTML = '<div class="card card-pad"><div class="empty">Aún no hay trabajadores. Añade uno o importa desde Excel.</div></div>'; return; }
-      var heads = ["Nombre", "ID de Telegram", "Teléfono", "Estado"];
+      var rows = data.workers.filter(workerMatches);
+      if (!rows.length) { wrap.innerHTML = '<div class="card card-pad"><div class="empty">Ningún trabajador coincide con la búsqueda.</div></div>'; return; }
+      var heads = ["Nombre", "ID interno", "ID de Telegram", "Teléfono", "Estado"];
       if (state.isAdmin) heads.push("Acciones");
-      wrap.innerHTML = tableWrap(heads, data.workers.map(function (w) {
-        return '<tr><td data-label="Nombre">' + esc(w.name) + '</td><td data-label="ID de Telegram" class="mono">' + esc(w.telegramId) + '</td><td data-label="Teléfono">' + esc(w.phone) + '</td><td data-label="Estado">' + statusPill(w.active) + "</td>" +
+      wrap.innerHTML = tableWrap(heads, rows.map(function (w) {
+        var wid = w.workerId ? esc(w.workerId) : '<span class="muted">—</span>';
+        return '<tr><td data-label="Nombre">' + esc(w.name) + '</td><td data-label="ID interno" class="mono">' + wid + '</td><td data-label="ID de Telegram" class="mono">' + esc(w.telegramId) + '</td><td data-label="Teléfono">' + esc(w.phone) + '</td><td data-label="Estado">' + statusPill(w.active) + "</td>" +
           (state.isAdmin ? '<td data-label="Acciones"><div class="tbl-actions"><button class="btn ghost sm" data-edit-worker="' + w.row + '">Editar</button><button class="btn danger sm" data-del-worker="' + w.row + '">Borrar</button></div></td>' : "") +
           "</tr>";
       }).join(""), true);
@@ -278,17 +395,64 @@
     }
     return '<div class="thumbs">' + html + "</div>";
   }
+  // Client-side visit filter: free-text (worker/point/note) + inclusive date range (by day).
+  function visitMatches(v) {
+    var q = filters.visitsQ.trim().toLowerCase();
+    if (q) {
+      var hay = (String(v.workerName || v.workerTelegramId || "") + " " + String(v.pointName || v.pointId || "") + " " + String(v.note || "")).toLowerCase();
+      if (hay.indexOf(q) === -1) return false;
+    }
+    var day = String(v.timestamp || "").slice(0, 10);
+    if (filters.visitsFrom && day < filters.visitsFrom) return false;
+    if (filters.visitsTo && day > filters.visitsTo) return false;
+    return true;
+  }
+  function filteredVisits() { return (state.visits || []).filter(visitMatches); }
+
   async function loadVisits() {
     var wrap = $("#visits-wrap");
     try {
-      var data = await api("/api/visits?limit=500");
-      if (!data.visits.length) { wrap.innerHTML = '<div class="card card-pad"><div class="empty">Aún no hay check-ins.</div></div>'; return; }
-      wrap.innerHTML = tableWrap(["Hora", "Trabajador", "Punto", "Ubicación", "Fotos", "Nota"], data.visits.map(function (v) {
-        return '<tr><td data-label="Hora">' + fmtTime(v.timestamp) + '</td><td data-label="Trabajador">' + esc(v.workerName || v.workerTelegramId) + '</td><td data-label="Punto">' + esc(v.pointName || v.pointId) + '</td><td data-label="Ubicación">' +
-          (v.mapsLink ? '<a href="' + esc(v.mapsLink) + '" target="_blank" rel="noopener">mapa ↗</a>' : '<span class="muted">—</span>') +
-          '</td><td data-label="Fotos">' + photoCell(v) + '</td><td data-label="Nota" class="muted">' + esc(v.note || "") + "</td></tr>";
-      }).join(""), true);
+      var data = await api("/api/visits?limit=5000");
+      state.visits = data.visits || [];
+      if (!state.visits.length) { wrap.innerHTML = '<div class="card card-pad"><div class="empty">Aún no hay check-ins.</div></div>'; return; }
+      renderVisits();
     } catch (e) { wrap.innerHTML = '<div class="card card-pad"><div class="empty">' + esc(e.message) + "</div></div>"; }
+  }
+  function renderVisits() {
+    var wrap = $("#visits-wrap");
+    var rows = filteredVisits();
+    if (!rows.length) { wrap.innerHTML = '<div class="card card-pad"><div class="empty">Ningún check-in coincide con el filtro.</div></div>'; return; }
+    wrap.innerHTML = tableWrap(["Hora", "Trabajador", "Punto", "Ubicación", "Fotos", "Nota"], rows.map(function (v) {
+      return '<tr><td data-label="Hora">' + fmtTime(v.timestamp) + '</td><td data-label="Trabajador">' + esc(v.workerName || v.workerTelegramId) + '</td><td data-label="Punto">' + esc(v.pointName || v.pointId) + '</td><td data-label="Ubicación">' +
+        (v.mapsLink ? '<a href="' + esc(v.mapsLink) + '" target="_blank" rel="noopener">mapa ↗</a>' : '<span class="muted">—</span>') +
+        '</td><td data-label="Fotos">' + photoCell(v) + '</td><td data-label="Nota" class="muted">' + esc(v.note || "") + "</td></tr>";
+    }).join(""), true);
+  }
+
+  // Export visits to CSV, generated entirely client-side (no extra endpoint).
+  function csvCell(v) {
+    var s = String(v == null ? "" : v);
+    return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+  }
+  async function downloadVisitsCsv() {
+    try {
+      // Export exactly what's shown: reuse the loaded list + active filter.
+      if (!state.visits.length) {
+        var data = await api("/api/visits?limit=5000");
+        state.visits = data.visits || [];
+      }
+      var visits = filteredVisits();
+      if (!visits.length) { toast("No hay visitas para exportar (revisa el filtro).", true); return; }
+      var cols = ["timestamp", "workerName", "workerTelegramId", "pointName", "pointId", "lat", "lng", "mapsLink", "photoCount", "source", "note"];
+      var csv = "﻿" + cols.join(",") + "\n" +
+        visits.map(function (v) { return cols.map(function (c) { return csvCell(v[c]); }).join(","); }).join("\n");
+      var url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8;" }));
+      var a = document.createElement("a");
+      a.href = url; a.download = "starx-visitas-" + new Date().toISOString().slice(0, 10) + ".csv";
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+      toast("Descargando " + visits.length + " visitas");
+    } catch (e) { toast(e.message, true); }
   }
 
   // Lightbox: click a thumbnail to view the full photo.
@@ -347,9 +511,9 @@
   }
 
   // ── Import ───────────────────────────────────────────────────────────────────
-  var POINT_FIELDS  = [{ key: "name", label: "Nombre" }, { key: "address", label: "Dirección" }, { key: "lat", label: "Latitud" }, { key: "lng", label: "Longitud" }, { key: "id", label: "ID (opcional)" }];
+  var POINT_FIELDS  = [{ key: "name", label: "Nombre" }, { key: "address", label: "Dirección" }, { key: "workerPhone", label: "Teléfono del trabajador (opcional)" }, { key: "lat", label: "Latitud" }, { key: "lng", label: "Longitud" }, { key: "id", label: "ID (opcional)" }];
   var WORKER_FIELDS = [{ key: "telegramId", label: "ID de Telegram" }, { key: "name", label: "Nombre" }, { key: "phone", label: "Teléfono" }];
-  var POINT_ORDER   = ["id", "name", "address", "lat", "lng"];
+  var POINT_ORDER   = ["id", "name", "address", "lat", "lng", "workerPhone"];
   var WORKER_ORDER  = ["telegramId", "name", "phone"];
   var SYNONYMS = {
     name: ["name", "nombre", "назв", "title", "point", "stop", "магаз", "клієнт", "клиент"],
@@ -357,6 +521,7 @@
     lat: ["lat", "latitud", "широт"], lng: ["lng", "lon", "long", "longitud", "довгот", "долгот"],
     id: ["id", "code", "codigo", "код", "артик"], telegramId: ["telegram", "tid", "chat", "telega"],
     phone: ["phone", "tel", "telefono", "моб", "тел", "номер"],
+    workerPhone: ["worker", "trabaj", "empleado", "phone", "tel", "telefono", "моб", "тел", "номер"],
   };
   var parsed = null;
 
@@ -398,11 +563,13 @@
   async function loadCheckin() {
     var sel = $("#ci-point");
     try {
-      var data = await api("/api/points");
-      var active = (data.points || []).filter(function (p) { return p.active; });
-      if (!active.length) { sel.innerHTML = '<option value="">No hay paradas asignadas</option>'; return; }
-      sel.innerHTML = active.map(function (p) {
-        return '<option value="' + esc(p.id) + '">' + esc(p.name || p.address || p.id) + "</option>";
+      // Only the stops assigned to THIS worker; a suffix marks those already done today.
+      var data = await api("/api/checkin/points");
+      var points = data.points || [];
+      if (!points.length) { sel.innerHTML = '<option value="">No hay paradas asignadas</option>'; return; }
+      sel.innerHTML = points.map(function (p) {
+        var mark = p.visitedToday ? " — hecho hoy" : "";
+        return '<option value="' + esc(p.id) + '">' + esc(p.name || p.address || p.id) + mark + "</option>";
       }).join("");
     } catch (e) { sel.innerHTML = '<option value="">' + esc(e.message) + "</option>"; }
   }
@@ -413,7 +580,7 @@
     navigator.geolocation.getCurrentPosition(function (pos) {
       checkin.lat = String(pos.coords.latitude);
       checkin.lng = String(pos.coords.longitude);
-      st.textContent = "✅ Ubicación capturada (" + checkin.lat.slice(0, 8) + ", " + checkin.lng.slice(0, 8) + ").";
+      st.textContent = "Ubicación capturada (" + checkin.lat.slice(0, 8) + ", " + checkin.lng.slice(0, 8) + ").";
     }, function () {
       st.textContent = "No se pudo obtener la ubicación. Permite el acceso e inténtalo de nuevo.";
     }, { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 });
@@ -428,10 +595,11 @@
       var file = $("#ci-photo").files[0];
       if (file) { body.photo = await fileToB64(file); body.photoContentType = file.type || "image/jpeg"; }
       await api("/api/checkin", { method: "POST", body: JSON.stringify(body) });
-      toast("✅ Check-in enviado");
+      toast("Check-in enviado");
       checkin = { lat: "", lng: "" };
       $("#ci-photo").value = ""; $("#ci-note").value = "";
       $("#ci-geo-status").textContent = "Aún no capturada.";
+      loadCheckin(); // refresh so the just-visited stop shows its "hecho hoy"
     } catch (e) { toast(e.message, true); }
     finally { btn.disabled = false; btn.innerHTML = '<svg class="ic"><use href="#i-check"/></svg> Enviar check-in'; }
   }
@@ -481,16 +649,20 @@
     var side = $("#side-nav"); if (side) side.classList.add("hidden");
   }
 
+  function setThemeIcon(dark) {
+    var el = $("#theme-icon");
+    if (el) el.innerHTML = '<use href="#' + (dark ? "i-sun" : "i-moon") + '"/>';
+  }
   function toggleTheme() {
     var dark = document.documentElement.classList.toggle("dark");
     try { localStorage.setItem("starx-theme", dark ? "dark" : "light"); } catch (e) {}
-    $("#theme-icon").textContent = dark ? "☀️" : "🌙";
+    setThemeIcon(dark);
     if (map) setTimeout(function () { map.invalidateSize(); }, 60);
   }
 
   async function init() {
     // Theme icon initial state
-    $("#theme-icon").textContent = document.documentElement.classList.contains("dark") ? "☀️" : "🌙";
+    setThemeIcon(document.documentElement.classList.contains("dark"));
     $("#theme-toggle").onclick = toggleTheme;
 
     // Sidebar nav
@@ -509,6 +681,7 @@
     // Delegated row actions + thumbnails
     document.addEventListener("click", function (e) {
       var t = e.target;
+      var cp = t.closest("[data-check-point]"); if (cp) { selectedPoints[cp.dataset.checkPoint] = cp.checked; updateBulkbar(); return; }
       var th = t.closest(".thumb");             if (th) return openLightbox(th.dataset.full);
       var ep = t.closest("[data-edit-point]");  if (ep) return editPoint(+ep.dataset.editPoint);
       var dp = t.closest("[data-del-point]");   if (dp) return delPoint(+dp.dataset.delPoint);
@@ -541,6 +714,34 @@
       });
     };
     $("#reload-visits").onclick = loadVisits;
+    var dlBtn = $("#download-visits"); if (dlBtn) dlBtn.onclick = downloadVisitsCsv;
+
+    // Points: search + worker filter + bulk assign (re-render from cached state.points).
+    var pSearch = $("#points-search");
+    if (pSearch) pSearch.oninput = function () { filters.pointsQ = this.value; loadPointsFromState(); };
+    var pWorker = $("#points-worker-filter");
+    if (pWorker) pWorker.onchange = function () { filters.pointsWorker = this.value; loadPointsFromState(); };
+    var bAssign = $("#points-bulk-assign"); if (bAssign) bAssign.onclick = bulkAssign;
+    var bClear = $("#points-bulk-clear");
+    if (bClear) bClear.onclick = function () { selectedPoints = {}; loadPointsFromState(); };
+
+    // Workers: search.
+    var wSearch = $("#workers-search");
+    if (wSearch) wSearch.oninput = function () { filters.workersQ = this.value; loadWorkers(); };
+
+    // Visits: search + date range (re-render from cached state.visits, no refetch).
+    var vSearch = $("#visits-search");
+    if (vSearch) vSearch.oninput = function () { filters.visitsQ = this.value; renderVisits(); };
+    var vFrom = $("#visits-from");
+    if (vFrom) vFrom.onchange = function () { filters.visitsFrom = this.value; renderVisits(); };
+    var vTo = $("#visits-to");
+    if (vTo) vTo.onchange = function () { filters.visitsTo = this.value; renderVisits(); };
+    var vClear = $("#visits-clear-dates");
+    if (vClear) vClear.onclick = function () {
+      filters.visitsFrom = ""; filters.visitsTo = "";
+      if (vFrom) vFrom.value = ""; if (vTo) vTo.value = "";
+      renderVisits();
+    };
 
     // Bot
     $("#bot-start").onclick = startBot;

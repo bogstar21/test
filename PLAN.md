@@ -49,8 +49,8 @@ Nothing else changes.
 
 | Tab / table | Columns                                                                            |
 |-----------|--------------------------------------------------------------------------------------|
-| `workers` | telegramId · name · phone · active                                                   |
-| `points`  | id · name · address · lat · lng · **geolocated** · active                            |
+| `workers` | telegramId · name · phone · active · **workerId** (internal, auto)                   |
+| `points`  | id · name · address · lat · lng · **geolocated** · active · **workerId** · **workerName** |
 | `visits`  | timestamp · visitId · workerTelegramId · workerName · pointId · pointName · lat · lng · mapsLink · photoCount · photoFileIds · **source** · note |
 | `settings`| tenant_id · key · value   (e.g. `pwa_enabled`)                                       |
 
@@ -58,8 +58,14 @@ All tables carry a `tenant_id` (default `default`) — the multi-tenant seam is 
 but inactive. Points load **without** coordinates; `geolocated` flips to true on the
 first check-in. `source` marks each visit as `bot` or `pwa`.
 
-`Route` (ordered points per worker per day) is intentionally **deferred** — for the
-MVP a worker simply sees all active points. Add a `routes` tab when a client needs it.
+**Point ↔ worker is 1:1.** Each worker gets an auto-generated `workerId`; each point
+stores the assigned `workerId` + a denormalised `workerName`. On upload (import / API)
+you reference the worker by **phone** or `workerId`, and the datasource resolves it
+internally. A worker sees **only their assigned points** in the bot `/route` and the PWA.
+
+`Route` (an *ordered* daily sequence of points) is intentionally **deferred** — for the
+MVP a worker sees their assigned points as a flat list. Add a `routes` tab when a
+client needs ordering / per-day scheduling.
 
 ---
 
@@ -67,13 +73,19 @@ MVP a worker simply sees all active points. Add a `routes` tab when a client nee
 
 ### Phase 1 — MVP ✅ (built)
 - Single company. Datasource: `memory` (default) / `supabase` (persistent) / `sheets`.
-- **Bot (one shared):** `/start` → register by phone → `/route` → check in (GPS + photos).
-  Token lives in server env only; the web app toggles the bot on/off.
-- **Worker PWA:** login by phone, browser GPS + photo → `/api/checkin` (source=`pwa`).
-  Manager enables/disables it from the UI (`pwa_enabled` setting).
+- **Bot (one shared):** `/start` → register by phone (**auto-create if not preloaded**)
+  → `/route` shows **only the worker's assigned points** (✅ = done today) → check in
+  (GPS + photos). Token lives in server env only; the web app toggles the bot on/off.
+- **Worker PWA:** login by phone, sees **only their assigned points** (✅ = done today),
+  browser GPS + photo → `/api/checkin` (source=`pwa`). Manager enables/disables it.
+- **Point ↔ worker (1:1):** manager assigns each point to a worker (UI dropdown, or by
+  phone on import / API); datasource resolves phone → `workerId` + `workerName`.
+- **Daily coverage:** dashboard shows per worker — done today / assigned + pending list.
+- **Export:** one-click CSV download of visits.
 - **Points without coordinates:** first check-in fixes each point's location.
-- **Connector API** (`/api/v1`, `X-API-Key`): client pushes workers/points, pulls visits.
-- **Platform:** login, dashboard (stats + map), CRUD, visits table, Excel/CSV import.
+- **Connector API** (`/api/v1`, `X-API-Key`): client pushes workers/points (with optional
+  `workerPhone` to assign), pulls visits.
+- **Platform:** login, dashboard (stats + map + coverage), CRUD, visits table, Excel/CSV import.
 
 ### Phase 2 — Multi-tenant (seam ready, inactive)
 - Every table already carries `tenant_id`; `TENANTS[]` + `getTenant(req)` exist.

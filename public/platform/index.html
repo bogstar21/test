@@ -8,7 +8,7 @@
   <link rel="icon" href="/platform/assets/icon.svg">
   <link rel="manifest" href="/platform/manifest.webmanifest">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-  <link rel="stylesheet" href="/platform/assets/app.css?v=5">
+  <link rel="stylesheet" href="/platform/assets/app.css?v=7">
   <script>
     // Apply saved theme before first paint (default light).
     (function () { try { if (localStorage.getItem('starx-theme') === 'dark') document.documentElement.classList.add('dark'); } catch (e) {} })();
@@ -33,6 +33,9 @@
     <symbol id="i-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></symbol>
     <symbol id="i-plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></symbol>
     <symbol id="i-power" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18.4 6.6a9 9 0 1 1-12.8 0"/><line x1="12" y1="2" x2="12" y2="12"/></symbol>
+    <symbol id="i-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></symbol>
+    <symbol id="i-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></symbol>
   </svg>
 
   <header class="topbar">
@@ -47,7 +50,7 @@
     <div class="top-right">
       <span class="badge" id="bot-badge"><span class="dot dot-muted"></span> Bot</span>
       <span class="user" id="user">…</span>
-      <button class="btn ghost sm icon" id="theme-toggle" type="button" aria-label="Cambiar tema"><span id="theme-icon" style="font-size:15px;line-height:1">🌙</span></button>
+      <button class="btn ghost sm icon" id="theme-toggle" type="button" aria-label="Cambiar tema"><svg class="ic" id="theme-icon"><use href="#i-moon"/></svg></button>
       <a class="btn ghost sm" href="/auth/logout">Salir</a>
     </div>
   </header>
@@ -83,7 +86,7 @@
         <div class="grid grid-4">
           <div class="card kpi"><div class="lbl"><svg class="ic"><use href="#i-check"/></svg> Check-ins totales</div><div class="num" id="s-visits">–</div><div class="sub">desde el inicio</div></div>
           <div class="card kpi"><div class="lbl"><svg class="ic"><use href="#i-clock"/></svg> Hoy</div><div class="num" id="s-today">–</div><div class="sub">check-ins de hoy</div></div>
-          <div class="card kpi"><div class="lbl"><svg class="ic"><use href="#i-pin"/></svg> Puntos activos</div><div class="num" id="s-points">–</div><div class="sub">paradas a visitar</div></div>
+          <div class="card kpi"><div class="lbl"><svg class="ic"><use href="#i-pin"/></svg> Puntos activos</div><div class="num" id="s-points">–</div><div class="sub" id="s-points-sub">paradas a visitar</div></div>
           <div class="card kpi"><div class="lbl"><svg class="ic"><use href="#i-users"/></svg> Trabajadores activos</div><div class="num" id="s-workers">–</div><div class="sub">personal de campo</div></div>
         </div>
 
@@ -105,6 +108,12 @@
           </div>
         </div>
 
+        <div class="section-title"><svg class="ic"><use href="#i-check"/></svg> Cobertura de hoy por trabajador</div>
+        <div class="card chart-card">
+          <p class="ct"><svg class="ic"><use href="#i-users"/></svg> Paradas hechas hoy sobre las asignadas</p>
+          <div class="barlist" id="coverage"><div class="empty">Sin datos aún</div></div>
+        </div>
+
         <div class="section-title"><svg class="ic"><use href="#i-map"/></svg> Últimos check-ins en el mapa</div>
         <div class="card chart-card"><div id="map"></div></div>
 
@@ -122,14 +131,27 @@
           <div><h1 class="h1">Puntos</h1><p class="lead">Las paradas que tus trabajadores deben visitar.</p></div>
           <div class="toolbar"><button class="btn admin-only" id="add-point"><svg class="ic"><use href="#i-plus"/></svg> Añadir punto</button></div>
         </div>
+        <div class="filterbar">
+          <label class="search"><svg class="ic"><use href="#i-search"/></svg><input id="points-search" type="search" placeholder="Buscar por nombre o dirección…"></label>
+          <select id="points-worker-filter"><option value="">Todos los trabajadores</option></select>
+        </div>
+        <div class="bulkbar admin-only hidden" id="points-bulkbar">
+          <span class="bulk-count" id="points-bulk-count">0 seleccionados</span>
+          <select id="points-bulk-worker"><option value="">— Sin asignar —</option></select>
+          <button class="btn sm" id="points-bulk-assign"><svg class="ic"><use href="#i-users"/></svg> Asignar seleccionados</button>
+          <button class="btn ghost sm" id="points-bulk-clear">Limpiar</button>
+        </div>
         <div id="points-wrap"><div class="empty">Cargando…</div></div>
       </section>
 
       <!-- ══════════════════ TRABAJADORES ══════════════════ -->
       <section class="view" id="view-workers">
         <div class="view-head">
-          <div><h1 class="h1">Trabajadores</h1><p class="lead">Tu personal de campo. Añádelos con su ID de Telegram para que puedan hacer check-in.</p></div>
+          <div><h1 class="h1">Trabajadores</h1><p class="lead">Tu personal de campo. Cárgalos con su <b>teléfono</b>; se enlazan solos al compartir su número en el bot.</p></div>
           <div class="toolbar"><button class="btn admin-only" id="add-worker"><svg class="ic"><use href="#i-plus"/></svg> Añadir trabajador</button></div>
+        </div>
+        <div class="filterbar">
+          <label class="search"><svg class="ic"><use href="#i-search"/></svg><input id="workers-search" type="search" placeholder="Buscar por nombre, teléfono o ID…"></label>
         </div>
         <div id="workers-wrap"><div class="empty">Cargando…</div></div>
       </section>
@@ -138,7 +160,13 @@
       <section class="view" id="view-visits">
         <div class="view-head">
           <div><h1 class="h1">Visitas</h1><p class="lead">Registro de check-ins con GPS y fotos. Escritos por el bot en tiempo real.</p></div>
-          <div class="toolbar"><button class="btn ghost" id="reload-visits"><svg class="ic"><use href="#i-refresh"/></svg> Actualizar</button></div>
+          <div class="toolbar"><button class="btn ghost" id="download-visits"><svg class="ic"><use href="#i-import"/></svg> Descargar CSV</button><button class="btn ghost" id="reload-visits"><svg class="ic"><use href="#i-refresh"/></svg> Actualizar</button></div>
+        </div>
+        <div class="filterbar">
+          <label class="search"><svg class="ic"><use href="#i-search"/></svg><input id="visits-search" type="search" placeholder="Buscar por trabajador, punto o nota…"></label>
+          <label class="date-field">Desde <input id="visits-from" type="date"></label>
+          <label class="date-field">Hasta <input id="visits-to" type="date"></label>
+          <button class="btn ghost sm" id="visits-clear-dates">Limpiar fechas</button>
         </div>
         <div id="visits-wrap"><div class="empty">Cargando…</div></div>
       </section>
@@ -224,11 +252,11 @@
             <label>Cargar puntos (sin coordenadas) — <code>POST /api/v1/points</code></label>
             <pre class="code-block"><code>{
   "points": [
-    { "id": "P1", "name": "Silpo Khreshchatyk", "address": "Khreshchatyk St 15, Kyiv" },
-    { "name": "ATB Podil", "address": "Verkhnii Val St 24, Kyiv" }
+    { "id": "P1", "name": "Silpo Khreshchatyk", "address": "Khreshchatyk St 15, Kyiv", "workerPhone": "+380671112233" },
+    { "name": "ATB Podil", "address": "Verkhnii Val St 24, Kyiv", "workerPhone": "+380677654321" }
   ]
 }</code></pre>
-            <p class="muted">Las coordenadas se rellenan solas en el <b>primer check-in</b> de cada punto.</p>
+            <p class="muted"><code>workerPhone</code> (opcional) enlaza el punto con su trabajador asignado. Las coordenadas se rellenan solas en el <b>primer check-in</b> de cada punto.</p>
           </div>
           <div class="field">
             <label>Leer visitas — <code>GET /api/v1/visits?limit=500</code></label>
@@ -248,9 +276,10 @@
           <p class="desc">Puedes usar cualquier cabecera — al importar asignas cada columna. Ejemplos recomendados:</p>
           <div class="field">
             <label>Puntos</label>
-            <pre class="code-block"><code>id,name,address
-P1,Silpo Khreshchatyk,Khreshchatyk St 15
-,ATB Podil,Verkhnii Val St 24</code></pre>
+            <pre class="code-block"><code>id,name,address,workerPhone
+P1,Silpo Khreshchatyk,Khreshchatyk St 15,+380671112233
+,ATB Podil,Verkhnii Val St 24,+380677654321</code></pre>
+            <p class="muted">La columna del <b>teléfono del trabajador</b> es opcional: enlaza cada punto con su trabajador asignado.</p>
           </div>
           <div class="field">
             <label>Trabajadores</label>
@@ -318,6 +347,6 @@ Olena Kovalenko,+380677654321</code></pre>
   <div class="toast" id="toast"></div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script src="/platform/assets/app.js?v=5"></script>
+  <script src="/platform/assets/app.js?v=7"></script>
 </body>
 </html>

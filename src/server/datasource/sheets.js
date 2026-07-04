@@ -16,8 +16,8 @@ const { phonesMatch } = require("../util");
 const _settings = new Map();
 
 const TABS = {
-  workers: { name: "workers", headers: ["telegramId", "name", "phone", "active"] },
-  points:  { name: "points",  headers: ["id", "name", "address", "lat", "lng", "active"] },
+  workers: { name: "workers", headers: ["telegramId", "name", "phone", "active", "workerId"] },
+  points:  { name: "points",  headers: ["id", "name", "address", "lat", "lng", "active", "workerId", "workerName"] },
   visits:  { name: "visits",  headers: ["timestamp", "visitId", "workerTelegramId", "workerName", "pointId", "pointName", "lat", "lng", "mapsLink", "photoCount", "photoFileIds", "note"] },
 };
 
@@ -30,9 +30,20 @@ function isActive(v) {
 function str(v) { return v == null ? "" : String(v); }
 
 // One datasource bound to a single spreadsheet. `forTenant` (in index.js) creates one.
+function newWorkerId() { return "w" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
+
 function makeSheetsSource(sheetId) {
   if (!sheetId) throw new Error("sheets datasource: missing sheetId");
   const api = getSheetsClient;
+
+  // Resolve a worker reference (phone OR worker_id) to { workerId, workerName }.
+  async function resolveWorker(ref) {
+    const r = str(ref).trim();
+    if (!r) return { workerId: "", workerName: "" };
+    const workers = await listWorkers();
+    const w = workers.find(x => (x.workerId && String(x.workerId) === r) || phonesMatch(x.phone, r));
+    return w ? { workerId: w.workerId, workerName: w.name } : { workerId: r, workerName: "" };
+  }
 
   async function readRows(tab) {
     const sheets = api();
@@ -116,26 +127,38 @@ function makeSheetsSource(sheetId) {
       name: str(r[1]).trim(),
       phone: str(r[2]).trim(),
       active: isActive(r[3]),
+      workerId: str(r[4]).trim(),
     })).filter(w => w.telegramId || w.name || w.phone);
   }
   async function addWorker(f) {
     const row = await nextEmptyRow(TABS.workers.name);
-    await writeRange(`${TABS.workers.name}!A${row}`, [[str(f.telegramId).trim(), str(f.name).trim(), str(f.phone).trim(), f.active === false ? "0" : "1"]]);
+    const workerId = str(f.workerId).trim() || newWorkerId();
+    await writeRange(`${TABS.workers.name}!A${row}`, [[str(f.telegramId).trim(), str(f.name).trim(), str(f.phone).trim(), f.active === false ? "0" : "1", workerId]]);
+    return { workerId, telegramId: str(f.telegramId).trim(), name: str(f.name).trim(), phone: str(f.phone).trim(), active: f.active !== false, row };
   }
   async function updateWorker(row, f) {
-    await writeRange(`${TABS.workers.name}!A${row}:D${row}`, [[str(f.telegramId).trim(), str(f.name).trim(), str(f.phone).trim(), f.active === false ? "0" : "1"]]);
+    const workerId = str(f.workerId).trim() || newWorkerId();
+    await writeRange(`${TABS.workers.name}!A${row}:E${row}`, [[str(f.telegramId).trim(), str(f.name).trim(), str(f.phone).trim(), f.active === false ? "0" : "1", workerId]]);
   }
   async function deleteWorker(row) { return deleteRows(TABS.workers.name, [row]); }
   async function appendWorkers(rows) {
-    const prepared = rows.map(r => [str(r[0]).trim(), str(r[1]).trim(), str(r[2]).trim(), "1"]).filter(r => r[0] || r[1] || r[2]);
+    const prepared = rows.map(r => [str(r[0]).trim(), str(r[1]).trim(), str(r[2]).trim(), "1", newWorkerId()]).filter(r => r[0] || r[1] || r[2]);
     return appendBlock(TABS.workers.name, prepared);
   }
   async function findWorkerByPhone(phone) {
     const workers = await listWorkers();
     return workers.find(w => phonesMatch(w.phone, phone)) || null;
   }
+  async function findWorkerById(workerId) {
+    const workers = await listWorkers();
+    const wid = str(workerId).trim();
+    return workers.find(w => String(w.workerId) === wid) || null;
+  }
   async function linkWorkerTelegram(row, telegramId) {
     await writeRange(`${TABS.workers.name}!A${row}`, [[str(telegramId).trim()]]);
+    // Backfill a worker_id if this row predates the column.
+    const cur = (await listWorkers()).find(w => w.row === row);
+    if (cur && !cur.workerId) await writeRange(`${TABS.workers.name}!E${row}`, [[newWorkerId()]]);
     return true;
   }
 
@@ -151,31 +174,54 @@ function makeSheetsSource(sheetId) {
       lng: str(r[4]).trim(),
       geolocated: !!(str(r[3]).trim() && str(r[4]).trim()),
       active: isActive(r[5]),
+      workerId: str(r[6]).trim(),
+      workerName: str(r[7]).trim(),
     })).filter(p => p.id || p.name || p.address);
+  }
+  async function listPointsForWorker(workerId) {
+    const wid = str(workerId).trim();
+    if (!wid) return [];
+    return (await listPoints()).filter(p => String(p.workerId) === wid);
+  }
+  // Clear the assignment on every point that belonged to a worker (used when a worker
+  // is deleted). Returns the count of points unassigned.
+  async function unassignPointsForWorker(workerId) {
+    const wid = str(workerId).trim();
+    if (!wid) return 0;
+    const pts = (await listPoints()).filter(p => String(p.workerId) === wid);
+    for (const p of pts) {
+      await updatePoint(p.row, { id: p.id, name: p.name, address: p.address, lat: p.lat, lng: p.lng, active: p.active, workerId: "" });
+    }
+    return pts.length;
   }
   async function ensurePointLocation(pointId, lat, lng) {
     if (!pointId || !lat || !lng) return false;
     const points = await listPoints();
     const p = points.find(x => String(x.id) === String(pointId));
     if (!p || (p.lat && p.lng)) return false;
-    await updatePoint(p.row, { id: p.id, name: p.name, address: p.address, lat, lng, active: p.active });
+    await updatePoint(p.row, { id: p.id, name: p.name, address: p.address, lat, lng, active: p.active, workerId: p.workerId });
     return true;
   }
   function newId(prefix) { return prefix + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
   async function addPoint(f) {
     const row = await nextEmptyRow(TABS.points.name);
     const id = str(f.id).trim() || newId("P");
-    await writeRange(`${TABS.points.name}!A${row}`, [[id, str(f.name).trim(), str(f.address).trim(), str(f.lat).trim(), str(f.lng).trim(), f.active === false ? "0" : "1"]]);
+    const w = await resolveWorker(f.workerId || f.workerPhone || f.worker);
+    await writeRange(`${TABS.points.name}!A${row}`, [[id, str(f.name).trim(), str(f.address).trim(), str(f.lat).trim(), str(f.lng).trim(), f.active === false ? "0" : "1", w.workerId, w.workerName]]);
     return id;
   }
   async function updatePoint(row, f) {
-    await writeRange(`${TABS.points.name}!A${row}:F${row}`, [[str(f.id).trim(), str(f.name).trim(), str(f.address).trim(), str(f.lat).trim(), str(f.lng).trim(), f.active === false ? "0" : "1"]]);
+    const w = await resolveWorker(f.workerId || f.workerPhone || f.worker);
+    await writeRange(`${TABS.points.name}!A${row}:H${row}`, [[str(f.id).trim(), str(f.name).trim(), str(f.address).trim(), str(f.lat).trim(), str(f.lng).trim(), f.active === false ? "0" : "1", w.workerId, w.workerName]]);
   }
   async function deletePoint(row) { return deleteRows(TABS.points.name, [row]); }
   async function appendPoints(rows) {
-    const prepared = rows
-      .map(r => [str(r[0]).trim() || newId("P"), str(r[1]).trim(), str(r[2]).trim(), str(r[3]).trim(), str(r[4]).trim(), "1"])
-      .filter(r => r[1] || r[2]);
+    const raw = rows.filter(r => str(r[1]).trim() || str(r[2]).trim());
+    const prepared = [];
+    for (const r of raw) {
+      const w = await resolveWorker(r[5]);
+      prepared.push([str(r[0]).trim() || newId("P"), str(r[1]).trim(), str(r[2]).trim(), str(r[3]).trim(), str(r[4]).trim(), "1", w.workerId, w.workerName]);
+    }
     return appendBlock(TABS.points.name, prepared);
   }
 
@@ -233,8 +279,8 @@ function makeSheetsSource(sheetId) {
 
   return {
     ensureSetup,
-    listWorkers, addWorker, updateWorker, deleteWorker, appendWorkers, findWorkerByPhone, linkWorkerTelegram,
-    listPoints, addPoint, updatePoint, deletePoint, appendPoints, ensurePointLocation,
+    listWorkers, addWorker, updateWorker, deleteWorker, appendWorkers, findWorkerByPhone, findWorkerById, linkWorkerTelegram,
+    listPoints, addPoint, updatePoint, deletePoint, appendPoints, ensurePointLocation, listPointsForWorker, unassignPointsForWorker,
     listVisits, addVisit,
     uploadPhoto, getPhoto,
     getSetting, setSetting,

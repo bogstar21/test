@@ -78,16 +78,43 @@ function mountVisitRoutes(app) {
         tally(byWorker, v.workerName || v.workerTelegramId);
         tally(byPoint, v.pointName || v.pointId);
       }
+
+      // Daily coverage per worker: of the active points assigned to each worker, how
+      // many were checked in today (X of Y), and which remain pending.
+      const activePoints = points.filter(p => p.active);
+      const pointsUnassigned = activePoints.filter(p => !p.workerId).length;
+      const doneTodayByWorker = {}; // telegramId → Set(pointId)
+      for (const v of visits) {
+        if ((v.timestamp || "").slice(0, 10) !== today) continue;
+        const tid = String(v.workerTelegramId || "");
+        (doneTodayByWorker[tid] || (doneTodayByWorker[tid] = new Set())).add(String(v.pointId));
+      }
+      const coverage = workers.map(w => {
+        const assigned = activePoints.filter(p => String(p.workerId) === String(w.workerId));
+        const done = doneTodayByWorker[String(w.telegramId)] || new Set();
+        const pending = assigned.filter(p => !done.has(String(p.id)));
+        return {
+          workerId: w.workerId,
+          workerName: w.name,
+          active: w.active,
+          assigned: assigned.length,
+          visitedToday: assigned.length - pending.length,
+          pending: pending.map(p => ({ id: p.id, name: p.name || p.address || p.id })),
+        };
+      });
+
       res.json({
         totals: {
           visits: visits.length,
           today: todayCount,
           points: points.length,
-          pointsActive: points.filter(p => p.active).length,
+          pointsActive: activePoints.length,
+          pointsUnassigned,
           workers: workers.length,
           workersActive: workers.filter(w => w.active).length,
         },
         byWorker, byPoint,
+        coverage,
         recent: visits.slice(0, 200),
       });
     } catch (e) { fail(res, e); }

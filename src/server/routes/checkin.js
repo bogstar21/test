@@ -10,9 +10,43 @@ const { forTenant } = require("../datasource");
 const bigJson = express.json({ limit: "12mb" }); // base64 photo payloads
 function str(v) { return v == null ? "" : String(v); }
 
+// Resolve the worker behind the current session (worker logs in by phone → session
+// carries telegramId + workerRow).
+async function sessionWorker(source, user) {
+  const workers = await source.listWorkers();
+  const byRow = user.workerRow && workers.find(w => String(w.row) === String(user.workerRow));
+  const byTid = user.telegramId && workers.find(w => String(w.telegramId) === String(user.telegramId));
+  return byRow || byTid || null;
+}
+
 function mountCheckinRoutes(app) {
   const r = express.Router();
   r.use(requireAuth);
+
+  // The logged-in worker's assigned stops, each flagged if already done today.
+  r.get("/points", async (req, res) => {
+    try {
+      const source = forTenant(config.getTenant(req));
+      const worker = await sessionWorker(source, req.user || {});
+      if (!worker) return res.json({ points: [] });
+      const points = (await source.listPointsForWorker(worker.workerId)).filter(p => p.active);
+      const today = new Date().toISOString().slice(0, 10);
+      const visits = await source.listVisits({ limit: 2000 });
+      const doneToday = new Set(
+        visits.filter(v => String(v.workerTelegramId) === String(worker.telegramId)
+                        && String(v.timestamp || "").slice(0, 10) === today)
+              .map(v => String(v.pointId)));
+      res.json({
+        points: points.map(p => ({
+          id: p.id, name: p.name, address: p.address,
+          visitedToday: doneToday.has(String(p.id)),
+        })),
+      });
+    } catch (e) {
+      console.error("/api/checkin/points error:", e && e.message);
+      res.status(500).json({ error: (e && e.message) || "server_error" });
+    }
+  });
 
   r.post("/", bigJson, async (req, res) => {
     try {
@@ -25,6 +59,14 @@ function mountCheckinRoutes(app) {
       const source = forTenant(config.getTenant(req));
       const point = (await source.listPoints()).find(p => String(p.id) === pointId);
       if (!point) return res.status(404).json({ error: "point_not_found" });
+
+      // A worker may only check in at their OWN assigned stop. Unassigned points are
+      // allowed (a manager may not have assigned them yet); a point belonging to a
+      // DIFFERENT worker is rejected.
+      const worker = await sessionWorker(source, req.user || {});
+      if (worker && point.workerId && String(point.workerId) !== String(worker.workerId)) {
+        return res.status(403).json({ error: "not_your_point", detail: "This stop is assigned to another worker." });
+      }
 
       // Optional photo → datasource photo store (Supabase Storage / in-memory).
       const photoFileIds = [];

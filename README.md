@@ -49,9 +49,14 @@ What's left is just: **who** went **where**, **when**, with **proof** (GPS + pho
 | Entity   | Fields                                                        |
 |----------|---------------------------------------------------------------|
 | Tenant   | id, name, datasource                                          |
-| Worker   | id, tenant, name, telegram_id                                 |
-| Point    | id, tenant, name, address, lat, lng                           |
+| Worker   | **worker_id** (internal, auto), tenant, name, phone, telegram_id |
+| Point    | id, tenant, name, address, lat, lng, **worker_id**, **worker_name** |
 | Visit    | id, tenant, worker, point, timestamp, lat, lng, photo(s), note |
+
+**Point ↔ worker is 1:1** (holodBot-style): each point is assigned to one worker via
+the worker's internal `worker_id` (with `worker_name` denormalised for display). On
+upload you reference the worker by **phone** (or `worker_id`); the datasource resolves
+it internally. A worker sees **only their assigned points** in the bot and the PWA.
 
 *Later (not MVP):* `Route` = ordered list of points per worker per day.
 
@@ -108,13 +113,19 @@ npm test    # boots the app in-memory and exercises the core flows (no network)
 - **One shared Telegram bot** for the whole platform. The token lives only in the
   server env (`TELEGRAM_TOKEN`); the web app just turns it on/off (Bot tab) — no
   token ever reaches the browser.
-- **Worker registration by phone** (holodBot-style): a worker is preloaded with a
-  phone, opens the bot, taps `/start`, shares their contact, and their `telegram_id`
-  is linked automatically.
+- **Worker registration by phone** (holodBot-style): a worker opens the bot, taps
+  `/start`, shares their contact. If their phone was preloaded, their `telegram_id`
+  is linked to that record; if not, a **new worker is auto-created** (self-onboarding).
+- **Points assigned to a worker (1:1).** The manager assigns each point to a worker
+  from a dropdown (or by phone on import/API). The bot `/route` and the PWA show a
+  worker **only their own** stops, with a ✅ next to those already done today.
 - **Points load without coordinates.** The **first check-in** fixes each point's
   location. The Points table shows a *Geo* column (`sí` / `pendiente`).
 - **Two ways to check in** — the Telegram bot *or* the **worker PWA** (web app).
   Workers log into the PWA by phone; the manager turns the PWA on/off from the UI.
+- **Daily coverage** on the dashboard: per worker, stops done today vs. assigned,
+  plus the pending list.
+- **Export visits to CSV** with one click from the Visits tab.
 - **Client connector API** (`/api/v1`, `X-API-Key`) — the client pushes their
   catalog and pulls the visit log. OFF until `INTEGRATION_API_KEY` is set.
 - **Data import** from Excel/CSV with a column-mapping step.
@@ -126,9 +137,9 @@ npm test    # boots the app in-memory and exercises the core flows (no network)
 { "workers": [ { "name": "Ivan Petrenko", "phone": "+380671112233" } ] }
 ```
 
-`POST /api/v1/points`  (no lat/lng — filled on first check-in)
+`POST /api/v1/points`  (no lat/lng — filled on first check-in; `workerPhone` optional, assigns the point)
 ```json
-{ "points": [ { "id": "P1", "name": "Silpo", "address": "Khreshchatyk St 15" } ] }
+{ "points": [ { "id": "P1", "name": "Silpo", "address": "Khreshchatyk St 15", "workerPhone": "+380671112233" } ] }
 ```
 
 `GET /api/v1/visits?limit=500`
@@ -141,9 +152,9 @@ curl -H "X-API-Key: YOUR_KEY" https://YOUR-DOMAIN/api/v1/visits?limit=500
 Any headers work (you map columns on import). Recommended:
 
 ```
-# points
-id,name,address
-P1,Silpo Khreshchatyk,Khreshchatyk St 15
+# points   (workerPhone optional — assigns the point to that worker)
+id,name,address,workerPhone
+P1,Silpo Khreshchatyk,Khreshchatyk St 15,+380671112233
 
 # workers
 name,phone

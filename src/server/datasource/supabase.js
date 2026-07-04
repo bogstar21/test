@@ -41,12 +41,25 @@ function makeSupabaseSource(tenant) {
   // Kept so the "Set up" button in the UI still resolves.
   async function ensureSetup() { return { created: [] }; }
 
+  const newWorkerId = () => newId("w");
+
+  // Resolve a worker reference (phone OR internal worker_id) to { workerId, workerName }.
+  async function resolveWorker(ref) {
+    const r = str(ref).trim();
+    if (!r) return { workerId: "", workerName: "" };
+    const workers = await listWorkers();
+    const w = workers.find(x =>
+      (x.workerId && String(x.workerId) === r) || phonesMatch(x.phone, r));
+    return w ? { workerId: w.workerId, workerName: w.name } : { workerId: r, workerName: "" };
+  }
+
   // ── Workers ──────────────────────────────────────────────────────────────────
   async function listWorkers() {
     const { data, error } = await db().from(T_WORKERS).select("*").order("pk", { ascending: true });
     ok(error);
     return (data || []).map(r => ({
       row: r.pk,
+      workerId: str(r.worker_id).trim(),
       telegramId: str(r.telegram_id).trim(),
       name: str(r.name).trim(),
       phone: str(r.phone).trim(),
@@ -54,22 +67,27 @@ function makeSupabaseSource(tenant) {
     }));
   }
   async function addWorker(f) {
+    const workerId = str(f.workerId).trim() || newWorkerId();
     const { error } = await db().from(T_WORKERS).insert({
       tenant_id: tenantId,
+      worker_id: workerId,
       telegram_id: str(f.telegramId).trim(),
       name: str(f.name).trim(),
       phone: str(f.phone).trim(),
       active: f.active !== false,
     });
     ok(error);
+    return { workerId, telegramId: str(f.telegramId).trim(), name: str(f.name).trim(), phone: str(f.phone).trim(), active: f.active !== false };
   }
   async function updateWorker(row, f) {
-    const { error } = await db().from(T_WORKERS).update({
+    const patch = {
       telegram_id: str(f.telegramId).trim(),
       name: str(f.name).trim(),
       phone: str(f.phone).trim(),
       active: f.active !== false,
-    }).eq("pk", row);
+    };
+    if (str(f.workerId).trim()) patch.worker_id = str(f.workerId).trim();
+    const { error } = await db().from(T_WORKERS).update(patch).eq("pk", row);
     ok(error);
   }
   async function deleteWorker(row) {
@@ -80,6 +98,7 @@ function makeSupabaseSource(tenant) {
   async function appendWorkers(rows) {
     const payload = (rows || []).map(r => ({
       tenant_id: tenantId,
+      worker_id: newWorkerId(),
       telegram_id: str(r[0]).trim(),
       name: str(r[1]).trim(),
       phone: str(r[2]).trim(),
@@ -96,8 +115,17 @@ function makeSupabaseSource(tenant) {
     const workers = await listWorkers();
     return workers.find(w => phonesMatch(w.phone, phone)) || null;
   }
+  async function findWorkerById(workerId) {
+    const workers = await listWorkers();
+    const wid = str(workerId).trim();
+    return workers.find(w => String(w.workerId) === wid) || null;
+  }
   async function linkWorkerTelegram(row, telegramId) {
-    const { error } = await db().from(T_WORKERS).update({ telegram_id: str(telegramId).trim() }).eq("pk", row);
+    const patch = { telegram_id: str(telegramId).trim() };
+    // Backfill a worker_id if this row predates the column.
+    const { data } = await db().from(T_WORKERS).select("worker_id").eq("pk", row).limit(1);
+    if (!(data && data[0] && str(data[0].worker_id).trim())) patch.worker_id = newWorkerId();
+    const { error } = await db().from(T_WORKERS).update(patch).eq("pk", row);
     ok(error);
     return true;
   }
@@ -111,20 +139,30 @@ function makeSupabaseSource(tenant) {
       id: str(r.id).trim(),
       name: str(r.name).trim(),
       address: str(r.address).trim(),
+      workerId: str(r.worker_id).trim(),
+      workerName: str(r.worker_name).trim(),
       lat: str(r.lat).trim(),
       lng: str(r.lng).trim(),
       geolocated: r.geolocated === true || !!(str(r.lat).trim() && str(r.lng).trim()),
       active: isActive(r.active),
     }));
   }
+  async function listPointsForWorker(workerId) {
+    const wid = str(workerId).trim();
+    if (!wid) return [];
+    const all = await listPoints();
+    return all.filter(p => String(p.workerId) === wid);
+  }
   async function addPoint(f) {
     const id = str(f.id).trim() || newId("P");
     const lat = str(f.lat).trim(), lng = str(f.lng).trim();
+    const w = await resolveWorker(f.workerId || f.workerPhone || f.worker);
     const { error } = await db().from(T_POINTS).insert({
       tenant_id: tenantId,
       id,
       name: str(f.name).trim(),
       address: str(f.address).trim(),
+      worker_id: w.workerId, worker_name: w.workerName,
       lat, lng,
       geolocated: !!(lat && lng),
       active: f.active !== false,
@@ -142,9 +180,29 @@ function makeSupabaseSource(tenant) {
       active: f.active !== false,
     };
     if (str(f.id).trim()) patch.id = str(f.id).trim();
+    // Reassign only when a worker reference is supplied.
+    const ref = f.workerId != null ? f.workerId : (f.workerPhone != null ? f.workerPhone : f.worker);
+    if (ref != null && str(ref).trim() !== "") {
+      const w = await resolveWorker(ref);
+      patch.worker_id = w.workerId; patch.worker_name = w.workerName;
+    } else if (ref != null) {
+      patch.worker_id = ""; patch.worker_name = "";
+    }
     const { error } = await db().from(T_POINTS).update(patch).eq("pk", row);
     ok(error);
   }
+  // Clear the assignment on every point that belonged to a worker (used when a worker
+  // is deleted). Returns 1 on success (Supabase doesn't return an affected-row count here).
+  async function unassignPointsForWorker(workerId) {
+    const wid = str(workerId).trim();
+    if (!wid) return 0;
+    const { error } = await db().from(T_POINTS)
+      .update({ worker_id: "", worker_name: "" })
+      .eq("tenant_id", tenantId).eq("worker_id", wid);
+    ok(error);
+    return 1;
+  }
+
   // Set a point's coords the first time it's checked in (only if still empty).
   async function ensurePointLocation(pointId, lat, lng) {
     if (!pointId || !lat || !lng) return false;
@@ -162,19 +220,25 @@ function makeSupabaseSource(tenant) {
     ok(error);
     return count || 0;
   }
+  // Row layout: [id, name, address, lat, lng, workerRef]. workerRef (phone or worker_id)
+  // resolves to the point's assigned worker.
   async function appendPoints(rows) {
-    const payload = (rows || []).map(r => {
+    const raw = (rows || []).filter(r => str(r[1]).trim() || str(r[2]).trim());
+    const payload = [];
+    for (const r of raw) {
       const lat = str(r[3]).trim(), lng = str(r[4]).trim();
-      return {
+      const w = await resolveWorker(r[5]);
+      payload.push({
         tenant_id: tenantId,
         id: str(r[0]).trim() || newId("P"),
         name: str(r[1]).trim(),
         address: str(r[2]).trim(),
+        worker_id: w.workerId, worker_name: w.workerName,
         lat, lng,
         geolocated: !!(lat && lng),
         active: true,
-      };
-    }).filter(r => r.name || r.address);
+      });
+    }
     if (!payload.length) return 0;
     const { error } = await db().from(T_POINTS).insert(payload);
     ok(error);
@@ -259,8 +323,8 @@ function makeSupabaseSource(tenant) {
 
   return {
     ensureSetup,
-    listWorkers, addWorker, updateWorker, deleteWorker, appendWorkers, findWorkerByPhone, linkWorkerTelegram,
-    listPoints, addPoint, updatePoint, deletePoint, appendPoints, ensurePointLocation,
+    listWorkers, addWorker, updateWorker, deleteWorker, appendWorkers, findWorkerByPhone, findWorkerById, linkWorkerTelegram,
+    listPoints, addPoint, updatePoint, deletePoint, appendPoints, ensurePointLocation, listPointsForWorker, unassignPointsForWorker,
     listVisits, addVisit,
     uploadPhoto, getPhoto,
     getSetting, setSetting,

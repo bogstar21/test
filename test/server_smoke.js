@@ -94,6 +94,11 @@ async function main() {
     assert.strictEqual(pushP.body.written, 1, "one point pushed");
     ok("connector pushes a point without coordinates");
 
+    // Point assigned to the just-pushed worker BY PHONE (resolved to worker_id internally).
+    const pushPY = await anon("POST", "/api/v1/points", { points: [{ id: "PY", name: "Assigned Point", address: "Calle 1", workerPhone: "+34600111222" }] }, key);
+    assert.strictEqual(pushPY.body.written, 1, "assigned point pushed");
+    ok("connector pushes a point assigned to a worker by phone");
+
     // ── Worker registration by phone (datasource seam) ────────────────────────
     const { forTenant } = require("../src/server/datasource");
     const { defaultTenant } = require("../src/server/config");
@@ -104,6 +109,17 @@ async function main() {
     const linked = (await ds.listWorkers()).find(w => w.row === found.row);
     assert.strictEqual(linked.telegramId, "555000111", "telegram id linked");
     ok("worker registers by phone → telegram id linked");
+
+    // ── Point ↔ worker association (resolved by phone at upload) ───────────────
+    const pyPoint = (await ds.listPoints()).find(p => p.id === "PY");
+    assert.ok(pyPoint && pyPoint.workerId === found.workerId && pyPoint.workerName === "Api Worker",
+      "PY resolved its worker by phone");
+    ok("point links to worker (worker_id + worker_name resolved by phone)");
+
+    const forWorker = await ds.listPointsForWorker(found.workerId);
+    assert.ok(forWorker.some(p => p.id === "PY"), "listPointsForWorker returns the assigned stop");
+    assert.ok(!forWorker.some(p => p.id === "PX"), "listPointsForWorker excludes unassigned stops");
+    ok("listPointsForWorker filters to the worker's stops");
 
     // ── PWA: disabled by default → worker login blocked ───────────────────────
     const w1 = await anon("POST", "/auth/worker", { phone: "+34600111222" });
@@ -122,10 +138,25 @@ async function main() {
     assert.strictEqual(w2.status, 200, "worker login ok");
     ok("worker logs in by phone");
 
+    // Worker sees ONLY their assigned stops, none marked done yet.
+    const myPts = await wrk("GET", "/api/checkin/points");
+    const pyBefore = (myPts.body.points || []).find(p => p.id === "PY");
+    assert.ok(pyBefore && pyBefore.visitedToday === false, "PY listed, not visited yet");
+    assert.ok(!(myPts.body.points || []).some(p => p.id === "PX"), "unassigned PX not listed");
+    ok("GET /api/checkin/points lists the worker's assigned stops");
+
     // Check in at PX (no coords yet) → should geolocate the point.
     const ci = await wrk("POST", "/api/checkin", { pointId: "PX", lat: "40.4168", lng: "-3.7038", note: "web" });
     assert.strictEqual(ci.body.ok, true, "checkin ok");
     ok("worker web check-in saved");
+
+    // Check in at the ASSIGNED stop → it should now show ✅ (visitedToday) for this worker.
+    const ciPY = await wrk("POST", "/api/checkin", { pointId: "PY", lat: "40.42", lng: "-3.70" });
+    assert.strictEqual(ciPY.body.ok, true, "checkin PY ok");
+    const myPts2 = await wrk("GET", "/api/checkin/points");
+    const pyAfter = (myPts2.body.points || []).find(p => p.id === "PY");
+    assert.ok(pyAfter && pyAfter.visitedToday === true, "PY marked done today");
+    ok("check-in marks the stop done today in /api/checkin/points");
 
     const pxAfter = (await ds.listPoints()).find(p => p.id === "PX");
     assert.ok(pxAfter.geolocated && pxAfter.lat === "40.4168", "PX geolocated on first check-in");
@@ -136,6 +167,14 @@ async function main() {
     const webVisit = (exp.body.visits || []).find(v => v.point.id === "PX");
     assert.ok(webVisit && webVisit.source === "pwa", "exported visit has source=pwa");
     ok("connector export includes the web check-in");
+
+    // ── Dashboard daily coverage (per worker: assigned / done today / pending) ──
+    const stats = await mgrReq("GET", "/api/stats");
+    assert.ok(Array.isArray(stats.body.coverage), "stats includes a coverage array");
+    const cov = stats.body.coverage.find(c => c.workerName === "Api Worker");
+    assert.ok(cov && cov.assigned >= 1 && cov.visitedToday >= 1, "coverage counts assigned + done today");
+    assert.strictEqual(cov.assigned - cov.visitedToday, cov.pending.length, "pending = assigned − done");
+    ok("GET /api/stats reports per-worker daily coverage");
 
     console.log(`\nAll ${passed} smoke checks passed ✅`);
   } finally {

@@ -5,7 +5,7 @@
 // default tenant (single-company MVP).
 //
 //   POST /api/v1/workers  body { "workers": [{ telegramId?, name, phone, active? }] }
-//   POST /api/v1/points   body { "points":  [{ id?, name, address }] }   (no lat/lng)
+//   POST /api/v1/points   body { "points":  [{ id?, name, address, workerPhone? }] }
 //   GET  /api/v1/visits   → { visits: [ shaped ] }   (?limit=, newest first)
 //
 // Points load WITHOUT coordinates on purpose — the first check-in fixes each point's
@@ -30,11 +30,14 @@ function workerRow(w) {
   w = w || {};
   return [str(w.telegramId || w.telegram_id), str(w.name), str(w.phone)];
 }
-// Map an incoming point object to the datasource appendPoints row: [id, name, address, lat, lng].
-// lat/lng intentionally empty — coordinates come from the first check-in.
+// Map an incoming point object to the datasource appendPoints row:
+// [id, name, address, lat, lng, workerRef]. lat/lng intentionally empty — coordinates
+// come from the first check-in. workerRef (phone or worker_id) links the point to its
+// assigned worker; it's resolved to worker_id + worker_name inside the datasource.
 function pointRow(p) {
   p = p || {};
-  return [str(p.id), str(p.name), str(p.address), "", ""];
+  const workerRef = p.workerPhone || p.worker_phone || p.workerId || p.worker_id || p.worker || "";
+  return [str(p.id), str(p.name), str(p.address), "", "", str(workerRef)];
 }
 
 // Shape a stored visit for external consumers. Photo URLs point back at our proxy so
