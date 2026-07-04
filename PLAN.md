@@ -109,7 +109,6 @@ client needs ordering / per-day scheduling.
 - **SheetJS** (`xlsx`) for Excel/CSV import.
 - **Vanilla JS PWA** for both the manager platform and the worker check-in (Leaflet
   for the map). No build step.
-- **Railway** for deploy (git push → redeploy). Own service, own env.
 
 ---
 
