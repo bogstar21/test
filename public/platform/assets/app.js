@@ -615,45 +615,30 @@
     if (pt) pt.innerHTML = '<svg class="ic"><use href="#i-power"/></svg> ' + (pwaOn ? "Desactivar PWA" : "Activar PWA");
 
     var connOn = !!(s && s.connectorEnabled);
-    var envKey = !!(s && s.connectorEnvKey);
     var key = (s && s.connectorKey) || "";
     var cs = $("#conn-status");
     if (cs) cs.textContent = connOn ? "activo" : "desactivado";
     var ch = $("#conn-hint");
-    if (ch) ch.textContent = envKey
-      ? "La clave está fijada en el servidor (INTEGRATION_API_KEY); se gestiona allí."
-      : (key
-        ? "El conector acepta peticiones con la clave de abajo (cabecera X-API-Key)."
-        : "Aún no hay clave. Genera una para activar el conector.");
+    if (ch) ch.textContent = key
+      ? "El conector acepta peticiones con la clave de abajo (cabecera X-API-Key)."
+      : "";
 
-    // Key management is hidden when the key is server-managed via env.
-    var row = $("#conn-key-row");
-    if (row) row.classList.toggle("hidden", envKey);
     var ki = $("#conn-key");
     if (ki) ki.value = key;
-    var gen = $("#conn-key-gen");
-    if (gen) gen.innerHTML = '<svg class="ic"><use href="#i-refresh"/></svg> ' + (key ? "Regenerar clave" : "Generar clave");
-    var rev = $("#conn-key-revoke");
-    if (rev) rev.classList.toggle("hidden", !key);
 
-    // Reflect the real key in the curl example (falls back to a placeholder).
+    // Reflect the real key + this deployment's URL in the curl example.
     var curl = $("#conn-curl");
     if (curl) {
       var origin = location.origin || "https://TU-DOMINIO";
-      curl.textContent = 'curl -H "X-API-Key: ' + (key || (envKey ? "TU_CLAVE" : "TU_CLAVE")) + '" \\\n  ' + origin + "/api/v1/visits?limit=500";
+      curl.textContent = 'curl -H "X-API-Key: ' + (key || "TU_CLAVE") + '" \\\n  ' + origin + "/api/v1/visits?limit=500";
     }
   }
   async function generateConnectorKey() {
-    if (!confirm("¿Generar una clave nueva? Si ya había una, dejará de funcionar.")) return;
+    if (!confirm("¿Regenerar la clave? La anterior dejará de funcionar de inmediato.")) return;
     var btn = $("#conn-key-gen"); btn.disabled = true;
-    try { renderSettings(await api("/api/connector/key", { method: "POST" })); toast("Clave generada"); }
+    try { renderSettings(await api("/api/connector/key", { method: "POST" })); toast("Clave regenerada"); }
     catch (e) { toast(e.message, true); }
     finally { btn.disabled = false; }
-  }
-  async function revokeConnectorKey() {
-    if (!confirm("¿Revocar la clave? El conector dejará de aceptar peticiones.")) return;
-    try { renderSettings(await api("/api/connector/key", { method: "DELETE" })); toast("Clave revocada"); }
-    catch (e) { toast(e.message, true); }
   }
   function copyConnectorKey() {
     var ki = $("#conn-key");
@@ -793,7 +778,6 @@
     // Settings (PWA toggle + connector key)
     var pwaBtn = $("#pwa-toggle"); if (pwaBtn) pwaBtn.onclick = togglePwa;
     var genBtn = $("#conn-key-gen"); if (genBtn) genBtn.onclick = generateConnectorKey;
-    var revBtn = $("#conn-key-revoke"); if (revBtn) revBtn.onclick = revokeConnectorKey;
     var cpyBtn = $("#conn-key-copy"); if (cpyBtn) cpyBtn.onclick = copyConnectorKey;
 
     // Import

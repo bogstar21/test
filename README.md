@@ -127,7 +127,11 @@ npm test    # boots the app in-memory and exercises the core flows (no network)
   plus the pending list.
 - **Export visits to CSV** with one click from the Visits tab.
 - **Client connector API** (`/api/v1`, `X-API-Key`) — the client pushes their
-  catalog and pulls the visit log. OFF until `INTEGRATION_API_KEY` is set.
+  catalog and pulls the visit log. **Self-service:** each company gets its own
+  unique API key, auto-created and shown in the platform (Importar y configurar →
+  Conexión por API), with a Regenerate button — no backend access needed. The key
+  identifies the company, so the connector reads/writes only that tenant's data.
+  (`INTEGRATION_API_KEY` still works as an optional legacy key for the default tenant.)
 - **Data import** from Excel/CSV with a column-mapping step.
 
 ### Connector API (examples)
@@ -173,7 +177,7 @@ one-line change — nothing in the routes or the bot changes:
 | `PLATFORM_PASSWORD`| Web login password (default `admin` — **change in production**)|
 | `COOKIE_SECURE`    | `true` when deployed behind HTTPS (e.g. Railway)               |
 | `TELEGRAM_TOKEN`   | The one shared check-in bot; the web app toggles it on/off     |
-| `INTEGRATION_API_KEY` | Enables the client connector at `/api/v1` (off until set)   |
+| `INTEGRATION_API_KEY` | *Optional/legacy.* The connector is self-service now — each company generates its own key in the UI. This env key, if set, also works for the default tenant. |
 | `GOOGLE_CREDENTIALS` / `SHEET_ID` | Needed only when `DATASOURCE=sheets`            |
 
 ## Setup (separate everything — holodBot untouched)

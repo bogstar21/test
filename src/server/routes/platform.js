@@ -24,22 +24,27 @@ function mountPlatformRoutes(app) {
     tenantId: req.user.tenantId, role: req.user.role,
   }));
 
-  // Platform settings for the manager UI. pwaEnabled is a per-tenant setting. The
-  // connector is enabled by either a platform-generated key (stored) or the legacy env
-  // key. The generated key is echoed back ONLY to an admin (their own session) so they
-  // can hand it to their client; the env key is never shown (managed on the server).
+  // A tenant always has a usable connector key. Auto-provision one for an admin the first
+  // time they look, so the connector is self-service with zero backend access. Returns "".
+  async function ensureConnectorKey(source, isAdmin) {
+    let key = String((await source.getSetting(CONNECTOR_KEY_SETTING, "")) || "");
+    if (!key && isAdmin) { key = generateApiKey(); await source.setSetting(CONNECTOR_KEY_SETTING, key); }
+    return key;
+  }
+
+  // Platform settings for the manager UI. pwaEnabled is a per-tenant setting. Each company
+  // has its own connector key (auto-created on first view); it's echoed back ONLY to an
+  // admin — their own session — so they can hand it to their integration.
   r.get("/settings", async (req, res) => {
     try {
       const source = forTenant(config.getTenant(req));
+      const isAdmin = req.user.role === "admin";
       const pwaEnabled = String(await source.getSetting("pwa_enabled", "0")) === "1";
-      const envKey     = !!(process.env.INTEGRATION_API_KEY || "");
-      const storedKey  = String((await source.getSetting(CONNECTOR_KEY_SETTING, "")) || "");
-      const isAdmin    = req.user.role === "admin";
+      const key = await ensureConnectorKey(source, isAdmin);
       res.json({
         pwaEnabled,
-        connectorEnabled: envKey || !!storedKey,
-        connectorEnvKey:  envKey,               // key set via env → not shown/rotatable here
-        connectorKey:     isAdmin ? storedKey : "",
+        connectorEnabled: !!key || !!(process.env.INTEGRATION_API_KEY || ""),
+        connectorKey:     isAdmin ? key : "",
       });
     } catch (e) {
       console.error("/api/settings error:", e && e.message);
@@ -47,26 +52,14 @@ function mountPlatformRoutes(app) {
     }
   });
 
-  // Generate (or regenerate) the connector API key. Regenerating invalidates the old
-  // key immediately, since only the stored value is accepted from then on.
+  // Rotate the connector API key. The new key is returned; the previous one stops working
+  // immediately, since only the stored value is accepted from then on.
   r.post("/connector/key", requireRole("admin"), async (req, res) => {
     try {
       const source = forTenant(config.getTenant(req));
       const key = generateApiKey();
       await source.setSetting(CONNECTOR_KEY_SETTING, key);
       res.json({ ok: true, connectorKey: key, connectorEnabled: true });
-    } catch (e) {
-      console.error("/api/connector/key error:", e && e.message);
-      res.status(500).json({ error: (e && e.message) || "server_error" });
-    }
-  });
-
-  // Revoke the generated key. The connector stays on only if a legacy env key exists.
-  r.delete("/connector/key", requireRole("admin"), async (req, res) => {
-    try {
-      const source = forTenant(config.getTenant(req));
-      await source.setSetting(CONNECTOR_KEY_SETTING, "");
-      res.json({ ok: true, connectorKey: "", connectorEnabled: !!(process.env.INTEGRATION_API_KEY || "") });
     } catch (e) {
       console.error("/api/connector/key error:", e && e.message);
       res.status(500).json({ error: (e && e.message) || "server_error" });
@@ -80,7 +73,8 @@ function mountPlatformRoutes(app) {
         await source.setSetting("pwa_enabled", req.body.pwaEnabled ? "1" : "0");
       }
       const pwaEnabled = String(await source.getSetting("pwa_enabled", "0")) === "1";
-      res.json({ ok: true, pwaEnabled, connectorEnabled: !!(process.env.INTEGRATION_API_KEY || "") });
+      const key = String((await source.getSetting(CONNECTOR_KEY_SETTING, "")) || "");
+      res.json({ ok: true, pwaEnabled, connectorEnabled: !!key || !!(process.env.INTEGRATION_API_KEY || "") });
     } catch (e) {
       console.error("/api/settings error:", e && e.message);
       res.status(500).json({ error: (e && e.message) || "server_error" });

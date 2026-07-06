@@ -18,7 +18,9 @@ const { forTenant } = require("../datasource");
 
 const MAX_ROWS = 5000;
 
-function ds() { return forTenant(config.defaultTenant()); }
+// The tenant is resolved from the X-API-Key by requireApiKey (req.user.tenantId), so the
+// connector reads/writes the company that owns the key — not a hardcoded tenant.
+function ds(req) { return forTenant(config.getTenant(req)); }
 function str(v) { return v == null ? "" : String(v); }
 function fail(res, e) {
   console.error("/api/v1 error:", e && e.message);
@@ -70,7 +72,7 @@ function mountConnectRoutes(app) {
       const input = (req.body && req.body.workers) || [];
       if (!Array.isArray(input) || !input.length) return res.status(400).json({ error: "no_workers" });
       if (input.length > MAX_ROWS) return res.status(400).json({ error: "too_many_rows", max: MAX_ROWS });
-      const written = await ds().appendWorkers(input.map(workerRow));
+      const written = await ds(req).appendWorkers(input.map(workerRow));
       res.json({ ok: true, written });
     } catch (e) { fail(res, e); }
   });
@@ -80,7 +82,7 @@ function mountConnectRoutes(app) {
       const input = (req.body && req.body.points) || [];
       if (!Array.isArray(input) || !input.length) return res.status(400).json({ error: "no_points" });
       if (input.length > MAX_ROWS) return res.status(400).json({ error: "too_many_rows", max: MAX_ROWS });
-      const written = await ds().appendPoints(input.map(pointRow));
+      const written = await ds(req).appendPoints(input.map(pointRow));
       res.json({ ok: true, written });
     } catch (e) { fail(res, e); }
   });
@@ -89,7 +91,7 @@ function mountConnectRoutes(app) {
     try {
       const limit = Math.min(parseInt(req.query.limit, 10) || 500, MAX_ROWS);
       const base = (config.PLATFORM_URL || `${req.protocol}://${req.get("host")}`).replace(/\/+$/, "");
-      const visits = await ds().listVisits({ limit });
+      const visits = await ds(req).listVisits({ limit });
       res.json({ visits: visits.map(v => shapeVisit(v, base)) });
     } catch (e) { fail(res, e); }
   });
@@ -99,7 +101,7 @@ function mountConnectRoutes(app) {
   // resolve the Telegram file_id and proxy the bytes (needs the bot running → 409 if off).
   r.get("/visits/:visitId/photo/:idx", async (req, res) => {
     try {
-      const source = ds();
+      const source = ds(req);
       const visits = await source.listVisits({ limit: MAX_ROWS });
       const visit = visits.find(v => String(v.visitId) === String(req.params.visitId));
       if (!visit) return res.status(404).json({ error: "visit_not_found" });

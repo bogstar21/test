@@ -70,6 +70,19 @@ async function main() {
     assert.strictEqual(me.body.role, "admin", "me is admin");
     ok("GET /api/me returns admin");
 
+    // Self-service: an admin gets a usable connector key the first time they look — no
+    // env var, no backend access. (This is separate from the legacy env key below.)
+    const autoKey = await mgrReq("GET", "/api/settings");
+    assert.ok(/^sk_/.test(autoKey.body.connectorKey || ""), "connector key auto-provisioned");
+    assert.strictEqual(autoKey.body.connectorEnabled, true, "connector reported enabled");
+    ok("connector key is auto-provisioned for the admin (self-service)");
+
+    // The auto-provisioned key works against the connector immediately.
+    const anonAuto = makeClient(base);
+    const autoOk = await anonAuto("GET", "/api/v1/visits?limit=1", undefined, { "X-API-Key": autoKey.body.connectorKey });
+    assert.strictEqual(autoOk.status, 200, "auto-provisioned key is accepted");
+    ok("connector accepts the auto-provisioned key");
+
     const pts = await mgrReq("GET", "/api/points");
     assert.ok(Array.isArray(pts.body.points) && pts.body.points.length >= 1, "seed points present");
     ok("GET /api/points lists seed data");
