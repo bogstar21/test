@@ -9,6 +9,13 @@
 --
 -- The server connects with the service_role key and bypasses RLS, so no policies are
 -- required for the MVP. If you later expose these tables to the anon key, add RLS.
+--
+-- ⚠️  If you see an error like:
+--       "Could not find the 'worker_id' column of 'starx_points' in the schema cache"
+--     your database was created with an OLDER version of this file (before that column
+--     existed) OR PostgREST's schema cache is stale. FIX: just re-run this whole file.
+--     The `alter table ... add column if not exists` statements below add any missing
+--     columns, and the final `notify pgrst, 'reload schema'` refreshes the cache.
 
 -- ── Workers ────────────────────────────────────────────────────────────────────
 create table if not exists public.starx_workers (
@@ -96,3 +103,9 @@ create index if not exists idx_starx_points_worker     on public.starx_points (w
 insert into storage.buckets (id, name, public)
 values ('visit-photos', 'visit-photos', true)
 on conflict (id) do nothing;
+
+-- ── Reload PostgREST's schema cache ────────────────────────────────────────────────
+-- PostgREST caches the table/column list and can serve a stale copy right after columns
+-- are added, surfacing "Could not find the '<col>' column ... in the schema cache". This
+-- forces an immediate reload, so re-running this file is a complete, self-contained fix.
+notify pgrst, 'reload schema';

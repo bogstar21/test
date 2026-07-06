@@ -99,17 +99,34 @@ function requireRole(...roles) {
 }
 
 // ─── API-key gate (for the client-facing connector at /api/v1) ───────────────────
-// Separate credential from the platform login. If INTEGRATION_API_KEY is unset, the
-// connector is OFF (503) — nothing is exposed until a key is deliberately set. The key
-// is read from the `X-API-Key` header, or `?key=` for quick manual tests.
-function requireApiKey(req, res, next) {
-  const configured = process.env.INTEGRATION_API_KEY || "";
-  if (!configured) return res.status(503).json({ error: "connector_disabled", detail: "Set INTEGRATION_API_KEY to enable the API." });
-  const sent = req.get("x-api-key") || req.query.key || "";
-  if (!sent || !safeEqual(sent, configured)) return res.status(401).json({ error: "bad_api_key" });
-  // Connector always acts on the default tenant for now (single-company MVP).
-  req.user = req.user || { role: "api", tenantId: config.TENANTS[0] && config.TENANTS[0].id, company: config.TENANTS[0] && config.TENANTS[0].name, viaApi: true };
-  next();
+// Separate credential from the platform login. The connector is ON when EITHER a key
+// was generated in the platform UI (stored as the `connector_api_key` setting) OR the
+// legacy INTEGRATION_API_KEY env var is set; otherwise it's OFF (503) — nothing is
+// exposed until a key is deliberately created. The key is read from the `X-API-Key`
+// header, or `?key=` for quick manual tests, and matched against either valid key.
+const CONNECTOR_KEY_SETTING = "connector_api_key";
+function generateApiKey() { return "sk_" + crypto.randomBytes(24).toString("hex"); }
+
+async function connectorKey() {
+  try {
+    const source = require("./datasource").forTenant(config.defaultTenant());
+    return String((await source.getSetting(CONNECTOR_KEY_SETTING, "")) || "");
+  } catch { return ""; }  // datasource unavailable → fall back to the env key only
+}
+
+async function requireApiKey(req, res, next) {
+  try {
+    const valid = [process.env.INTEGRATION_API_KEY || "", await connectorKey()].filter(Boolean);
+    if (!valid.length) return res.status(503).json({ error: "connector_disabled", detail: "Generate an API key in the platform (Importar y configurar → Conexión por API), or set INTEGRATION_API_KEY." });
+    const sent = req.get("x-api-key") || req.query.key || "";
+    if (!sent || !valid.some(k => safeEqual(sent, k))) return res.status(401).json({ error: "bad_api_key" });
+    // Connector always acts on the default tenant for now (single-company MVP).
+    req.user = req.user || { role: "api", tenantId: config.TENANTS[0] && config.TENANTS[0].id, company: config.TENANTS[0] && config.TENANTS[0].name, viaApi: true };
+    next();
+  } catch (e) {
+    console.error("requireApiKey error:", e && e.message);
+    res.status(500).json({ error: "server_error" });
+  }
 }
 
 // ─── Password login (per-tenant) ───────────────────────────────────────────────
@@ -190,4 +207,4 @@ function notConfiguredPage() {
     '</div></body></html>';
 }
 
-module.exports = { mountAuthRoutes, attachUser, requireAuth, requireRole, requireApiKey, setSessionCookie, verifySession };
+module.exports = { mountAuthRoutes, attachUser, requireAuth, requireRole, requireApiKey, setSessionCookie, verifySession, generateApiKey, CONNECTOR_KEY_SETTING };

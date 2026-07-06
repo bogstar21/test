@@ -168,6 +168,20 @@ async function main() {
     assert.ok(webVisit && webVisit.source === "pwa", "exported visit has source=pwa");
     ok("connector export includes the web check-in");
 
+    // ── Platform-generated connector key (admin generates → connector accepts it) ──
+    const gen = await mgrReq("POST", "/api/connector/key");
+    assert.ok(gen.body.ok && /^sk_/.test(gen.body.connectorKey || ""), "admin generates a key");
+    ok("admin generates a connector API key");
+
+    const settings = await mgrReq("GET", "/api/settings");
+    assert.strictEqual(settings.body.connectorKey, gen.body.connectorKey, "settings echoes key to admin");
+    ok("GET /api/settings returns the generated key to the admin");
+
+    const genKey = { "X-API-Key": gen.body.connectorKey };
+    const withGen = await anon("GET", "/api/v1/visits?limit=1", undefined, genKey);
+    assert.strictEqual(withGen.status, 200, "connector accepts the generated key");
+    ok("connector accepts the platform-generated key");
+
     // ── Dashboard daily coverage (per worker: assigned / done today / pending) ──
     const stats = await mgrReq("GET", "/api/stats");
     assert.ok(Array.isArray(stats.body.coverage), "stats includes a coverage array");

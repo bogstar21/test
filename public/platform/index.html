@@ -8,7 +8,7 @@
   <link rel="icon" href="/platform/assets/icon.svg">
   <link rel="manifest" href="/platform/manifest.webmanifest">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-  <link rel="stylesheet" href="/platform/assets/app.css?v=7">
+  <link rel="stylesheet" href="/platform/assets/app.css?v=8">
   <script>
     // Apply saved theme before first paint (default light).
     (function () { try { if (localStorage.getItem('starx-theme') === 'dark') document.documentElement.classList.add('dark'); } catch (e) {} })();
@@ -135,12 +135,16 @@
           <label class="search"><svg class="ic"><use href="#i-search"/></svg><input id="points-search" type="search" placeholder="Buscar por nombre o dirección…"></label>
           <select id="points-worker-filter"><option value="">Todos los trabajadores</option></select>
         </div>
-        <div class="bulkbar admin-only hidden" id="points-bulkbar">
+        <!-- Visibility is driven solely by selection (updateBulkbar), which already gates
+             on state.isAdmin. It must NOT carry `admin-only`, or applyAdmin would un-hide it
+             on load (before any selection) causing a brief flash on the Points view. -->
+        <div class="bulkbar hidden" id="points-bulkbar">
           <span class="bulk-count" id="points-bulk-count">0 seleccionados</span>
           <select id="points-bulk-worker"><option value="">— Sin asignar —</option></select>
           <button class="btn sm" id="points-bulk-assign"><svg class="ic"><use href="#i-users"/></svg> Asignar seleccionados</button>
           <button class="btn ghost sm" id="points-bulk-clear">Limpiar</button>
         </div>
+        <p class="muted admin-only" style="margin:2px 2px 10px">Para asignar un trabajador: marca una o varias casillas y usa <b>Asignar seleccionados</b>, o pulsa <b>Editar</b> en un punto y elige el trabajador.</p>
         <div id="points-wrap"><div class="empty">Cargando…</div></div>
       </section>
 
@@ -239,6 +243,19 @@
           <h3><svg class="ic"><use href="#i-send"/></svg> Conexión por API (conector)</h3>
           <p class="desc">El cliente empuja su catálogo y lee las visitas por API. Se autentica con la cabecera <code>X-API-Key</code>. Estado: <b id="conn-status">…</b></p>
           <p class="muted" id="conn-hint" style="margin-top:4px"></p>
+
+          <div class="field admin-only" id="conn-key-row" style="margin-top:12px">
+            <label>Tu clave de API (<code>X-API-Key</code>)</label>
+            <div class="key-row">
+              <input id="conn-key" type="text" readonly placeholder="Aún no generada — pulsa «Generar clave»">
+              <button class="btn ghost sm" id="conn-key-copy" type="button">Copiar</button>
+            </div>
+            <div class="toolbar" style="margin-top:8px">
+              <button class="btn sm" id="conn-key-gen" type="button"><svg class="ic"><use href="#i-refresh"/></svg> Generar clave</button>
+              <button class="btn danger sm hidden" id="conn-key-revoke" type="button">Revocar</button>
+            </div>
+            <p class="muted" style="margin-top:6px">Entrégasela a tu cliente. Guárdala: por seguridad, al regenerarla la anterior deja de funcionar.</p>
+          </div>
           <div class="field">
             <label>Cargar trabajadores — <code>POST /api/v1/workers</code></label>
             <pre class="code-block"><code>{
@@ -260,7 +277,7 @@
           </div>
           <div class="field">
             <label>Leer visitas — <code>GET /api/v1/visits?limit=500</code></label>
-            <pre class="code-block"><code>curl -H "X-API-Key: TU_CLAVE" \
+            <pre class="code-block"><code id="conn-curl">curl -H "X-API-Key: TU_CLAVE" \
   https://TU-DOMINIO/api/v1/visits?limit=500</code></pre>
           </div>
         </div>
@@ -347,6 +364,6 @@ Olena Kovalenko,+380677654321</code></pre>
   <div class="toast" id="toast"></div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script src="/platform/assets/app.js?v=7"></script>
+  <script src="/platform/assets/app.js?v=8"></script>
 </body>
 </html>
