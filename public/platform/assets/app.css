@@ -211,16 +211,32 @@ a:hover { text-decoration: underline; }
 .filterbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
 .filterbar .search { position: relative; display: flex; align-items: center; flex: 1 1 240px; min-width: 200px; }
 .filterbar .search .ic { position: absolute; left: 11px; width: 16px; height: 16px; color: var(--faint); pointer-events: none; }
-.filterbar .search input { width: 100%; height: 38px; padding: 0 12px 0 34px; font: inherit; font-size: 14px; color: var(--text); background: var(--glass); border: 1px solid var(--border); border-radius: var(--radius); transition: border-color .12s ease, background .12s ease; }
+/* One shared look for every filter control (search, dropdowns, date pickers). */
+.filterbar .search input,
+.filterbar select,
+.filterbar .date-field input {
+  height: 40px; font: inherit; font-size: 14px; color: var(--text);
+  background: var(--glass); border: 1px solid var(--border); border-radius: var(--radius);
+  transition: border-color .14s ease, background .14s ease, box-shadow .14s ease;
+}
+.filterbar .search input { width: 100%; padding: 0 12px 0 34px; }
 .filterbar .search input::placeholder { color: var(--faint); }
-.filterbar .search input:focus { outline: none; border-color: var(--accent); background: var(--glass-2); }
-.filterbar select { width: auto; min-width: 180px; }
+.filterbar select { width: auto; min-width: 190px; padding: 0 34px 0 12px; }
 .filterbar .date-field { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--faint); }
-.filterbar .date-field input { width: auto; height: 38px; padding: 0 10px; font: inherit; font-size: 13px; color: var(--text); background: var(--glass); border: 1px solid var(--border); border-radius: var(--radius); }
-.filterbar .date-field input:focus { outline: none; border-color: var(--accent); background: var(--glass-2); }
+.filterbar .date-field input { width: auto; padding: 0 10px; font-size: 13px; }
+.filterbar .search input:hover, .filterbar select:hover, .filterbar .date-field input:hover { border-color: var(--border-strong); }
+.filterbar .search input:focus, .filterbar select:focus, .filterbar .date-field input:focus {
+  outline: none; border-color: var(--accent); background: var(--glass-2); box-shadow: 0 0 0 3px var(--accent-soft);
+}
 .bulkbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; padding: 10px 14px; background: var(--glass-2); border: 1px solid var(--border-strong); border-radius: var(--radius); }
 .bulkbar .bulk-count { font-size: 13px; font-weight: 600; color: var(--strong); margin-right: auto; }
-.bulkbar select { width: auto; min-width: 180px; }
+.bulkbar select {
+  width: auto; min-width: 190px; height: 38px; padding: 0 34px 0 12px; font: inherit; font-size: 14px;
+  color: var(--text); background: var(--glass); border: 1px solid var(--border); border-radius: var(--radius);
+  transition: border-color .14s ease, background .14s ease, box-shadow .14s ease;
+}
+.bulkbar select:hover { border-color: var(--border-strong); }
+.bulkbar select:focus { outline: none; border-color: var(--accent); background: var(--glass-2); box-shadow: 0 0 0 3px var(--accent-soft); }
 .row-check { width: 16px; height: 16px; cursor: pointer; accent-color: var(--accent); }
 
 /* ── Cards ─────────────────────────────────────────────────────────────── */
@@ -269,6 +285,21 @@ a:hover { text-decoration: underline; }
 .chart .grid-line { stroke: var(--border); stroke-width: 1; }
 .chart .axis-lbl { fill: var(--faint); font-size: 10px; }
 
+/* Compact dashboard charts (source donut + weekday bars). */
+.chart-sm { min-height: 168px; display: flex; align-items: center; justify-content: center; }
+.chart-sm .empty { padding: 40px 0; }
+.donut-wrap { display: flex; align-items: center; gap: 22px; flex-wrap: wrap; justify-content: center; width: 100%; }
+.donut-legend { display: flex; flex-direction: column; gap: 10px; font-size: 13px; color: var(--dim); }
+.donut-legend .dot { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 7px; vertical-align: middle; }
+.donut-legend b { color: var(--strong); }
+.wd-bars { display: flex; align-items: flex-end; gap: 10px; width: 100%; height: 168px; padding-top: 6px; }
+.wd-col { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; gap: 5px; }
+.wd-col .wd-val { font-size: 11px; font-weight: 600; color: var(--strong); min-height: 13px; }
+.wd-col .wd-bar { width: 100%; max-width: 34px; border-radius: 7px 7px 0 0; background: var(--grad); min-height: 3px; }
+.wd-col .wd-lbl { font-size: 11px; color: var(--faint); }
+.map-legend { background: var(--bar-bg); border: 1px solid var(--border); border-radius: 8px; padding: 6px 9px; font-size: 12px; color: var(--dim); display: flex; gap: 12px; backdrop-filter: blur(6px); }
+.map-legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 5px; vertical-align: middle; }
+
 .barlist { display: flex; flex-direction: column; gap: 11px; }
 .barlist .bl-row { display: grid; grid-template-columns: 120px 1fr 42px; align-items: center; gap: 12px; }
 .barlist .bl-name { font-size: 12.5px; color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -297,11 +328,14 @@ a:hover { text-decoration: underline; }
 .input, .field input, .field select, .field textarea {
   width: 100%; height: 38px; padding: 0 12px; font: inherit; font-size: 14px;
   color: var(--text); background: var(--glass); border: 1px solid var(--border); border-radius: var(--radius);
-  transition: border-color .12s ease, background .12s ease;
+  transition: border-color .14s ease, background .14s ease, box-shadow .14s ease;
 }
 .input::placeholder, .field input::placeholder { color: var(--faint); }
-.input:hover, .field input:hover, .field select:hover { border-color: var(--border-strong); }
-.input:focus, .field input:focus, .field select:focus, .field textarea:focus { outline: none; border-color: var(--accent); background: var(--glass-2); }
+.input:hover, .field input:hover, .field select:hover, .field textarea:hover { border-color: var(--border-strong); }
+.input:focus, .field input:focus, .field select:focus, .field textarea:focus {
+  outline: none; border-color: var(--accent); background: var(--glass-2);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
 textarea.input { height: auto; min-height: 76px; padding: 10px 12px; resize: vertical; }
 select, .select {
   appearance: none; -webkit-appearance: none; cursor: pointer; padding-right: 30px;

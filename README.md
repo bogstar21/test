@@ -148,7 +148,7 @@ npm test    # boots the app in-memory and exercises the core flows (no network)
 
 `GET /api/v1/visits?limit=500`
 ```bash
-curl -H "X-API-Key: YOUR_KEY" https://YOUR-DOMAIN/api/v1/visits?limit=500
+curl -H "X-API-Key: YOUR_KEY" https://starx.up.railway.app/api/v1/visits?limit=500
 ```
 
 ### Excel / CSV structure

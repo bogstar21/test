@@ -77,8 +77,18 @@ function attachHandlers(bot) {
     }
   });
 
-  // Build + send the route as inline buttons. Shared by /route and the refresh button.
-  async function sendRoute(chatId, userId) {
+  // How many stop buttons to show at once before asking the worker to search instead.
+  const ROUTE_PAGE = 12;
+  function pointMatches(p, q) {
+    if (!q) return true;
+    const hay = (String(p.name || "") + " " + String(p.address || "") + " " + String(p.id || "")).toLowerCase();
+    return hay.indexOf(q.toLowerCase()) !== -1;
+  }
+
+  // Build + send the route as inline buttons. Shared by /route, the refresh button, and
+  // the search flow. `query` (optional) filters the stops by name/address so a worker
+  // with many points types a few letters instead of scrolling dozens of buttons.
+  async function sendRoute(chatId, userId, query) {
     const worker = await findWorker(userId);
     if (!worker) return askForContact(chatId);
 
@@ -86,14 +96,32 @@ function attachHandlers(bot) {
     if (!points.length) return bot.sendMessage(chatId, "Todavía no tienes paradas asignadas. Pídele a tu responsable que te las asigne.");
 
     const visited = await visitedTodayIds(userId);
-    setState(userId, { worker, routeMap: points });
+    // routeMap stays the FULL list so ci:i callbacks keep pointing at the right stop.
+    setState(userId, { step: "route", worker, routeMap: points });
     const doneCount = points.filter(p => visited.has(String(p.id))).length;
-    const buttons = points.slice(0, 40).map((p, i) => {
+
+    const q = String(query || "").trim();
+    // Keep each point's original index in routeMap so filtered buttons still resolve.
+    const matches = points.map((p, i) => ({ p, i })).filter(x => pointMatches(x.p, q));
+    const shown = matches.slice(0, ROUTE_PAGE);
+
+    const buttons = shown.map(({ p, i }) => {
       const done = visited.has(String(p.id));
       return [{ text: `${done ? "✅" : "📍"} ${p.name || p.address || p.id}`, callback_data: `ci:${i}` }];
     });
-    buttons.push([{ text: "🔄 Actualizar", callback_data: "route:refresh" }]);
-    const header = `🗺 *Tus paradas* — ${doneCount}/${points.length} hechas hoy.\nPulsa una para hacer check-in (✅ = ya hecha hoy):`;
+    buttons.push([{ text: "🔍 Buscar parada", callback_data: "route:search" }, { text: "🔄 Actualizar", callback_data: "route:refresh" }]);
+
+    let header;
+    if (q) {
+      header = matches.length
+        ? `🔎 *${matches.length}* resultado(s) para "${esc(q)}"${matches.length > ROUTE_PAGE ? ` (mostrando ${ROUTE_PAGE}, afina la búsqueda)` : ""}:`
+        : `🔎 Nada coincide con "${esc(q)}".\nPulsa *🔍 Buscar parada* para probar otra vez.`;
+    } else {
+      const more = points.length > ROUTE_PAGE
+        ? `\nTienes *${points.length}* paradas — pulsa *🔍 Buscar parada* para encontrar una por nombre.`
+        : "";
+      header = `🗺 *Tus paradas* — ${doneCount}/${points.length} hechas hoy.${more}\nPulsa una para hacer check-in (✅ = ya hecha hoy):`;
+    }
     return bot.sendMessage(chatId, header, {
       parse_mode: "Markdown",
       reply_markup: { inline_keyboard: buttons },
@@ -116,6 +144,11 @@ function attachHandlers(bot) {
       await bot.answerCallbackQuery(q.id, { text: "Ruta actualizada" }).catch(() => {});
       try { await sendRoute(q.message.chat.id, userId); } catch (e) { console.error("route refresh error:", e.message); }
       return;
+    }
+    if (action === "route" && idx === "search") {
+      setState(userId, { step: "searching" });
+      await bot.answerCallbackQuery(q.id).catch(() => {});
+      return bot.sendMessage(q.message.chat.id, "🔍 Escribe parte del *nombre o dirección* de la parada:", { parse_mode: "Markdown" });
     }
     if (action !== "ci") return bot.answerCallbackQuery(q.id).catch(() => {});
 
@@ -213,6 +246,13 @@ function attachHandlers(bot) {
     if (text === BTN_CANCEL) {
       clearState(userId);
       return bot.sendMessage(msg.chat.id, "Cancelado.", { reply_markup: removeKb });
+    }
+
+    // Worker typed a search query after tapping "🔍 Buscar parada" → show matching stops.
+    if (st.step === "searching") {
+      try { await sendRoute(msg.chat.id, userId, text); }
+      catch (e) { console.error("route search error:", e.message); bot.sendMessage(msg.chat.id, "⚠️ No pude buscar. Pulsa /route."); }
+      return;
     }
 
     if (text === BTN_DONE) {

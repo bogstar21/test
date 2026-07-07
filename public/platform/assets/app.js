@@ -44,6 +44,9 @@
     visitsQ: "", visitsFrom: "", visitsTo: "",
   };
   var selectedPoints = {}; // row → true, for bulk assignment
+  // Dashboard filters (apply to the charts + map, computed from the recent visits list).
+  var dashFilters = { worker: "", source: "", from: "", to: "" };
+  var lastRecent = [];
 
   // ── Modal ────────────────────────────────────────────────────────────────────
   var modalSave = null;
@@ -65,16 +68,37 @@
     L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19, attribution: "© OpenStreetMap" }).addTo(map);
     markers = L.layerGroup().addTo(map);
   }
+  var SRC_COLOR = { bot: "#6366f1", pwa: "#22c55e" };
+  var mapLegend = null;
+  function ensureLegend() {
+    if (mapLegend || !map || typeof L === "undefined") return;
+    mapLegend = L.control({ position: "bottomright" });
+    mapLegend.onAdd = function () {
+      var d = L.DomUtil.create("div", "map-legend");
+      d.innerHTML =
+        '<span><i style="background:' + SRC_COLOR.bot + '"></i>Bot</span>' +
+        '<span><i style="background:' + SRC_COLOR.pwa + '"></i>App</span>';
+      return d;
+    };
+    mapLegend.addTo(map);
+  }
   function plotVisits(list) {
     ensureMap();
     if (!map) return;
+    ensureLegend();
     markers.clearLayers();
     var pts = [];
     (list || []).forEach(function (v) {
       var lat = parseFloat(v.lat), lng = parseFloat(v.lng);
       if (isFinite(lat) && isFinite(lng)) {
-        markers.addLayer(L.marker([lat, lng]).bindPopup(
-          "<b>" + esc(v.pointName || "—") + "</b><br>" + esc(v.workerName || "") + "<br>" + fmtTime(v.timestamp)));
+        var color = SRC_COLOR[v.source] || SRC_COLOR.bot;
+        var photos = (v.photoCount || 0) > 0 ? "<br>📸 " + v.photoCount : "";
+        markers.addLayer(L.circleMarker([lat, lng], {
+          radius: 7, color: color, weight: 2, fillColor: color, fillOpacity: 0.55,
+        }).bindPopup(
+          "<b>" + esc(v.pointName || "—") + "</b><br>" + esc(v.workerName || "") +
+          "<br><span style='color:" + color + "'>●</span> " + (v.source === "pwa" ? "App" : "Bot") +
+          "<br>" + fmtTime(v.timestamp) + photos));
         pts.push([lat, lng]);
       }
     });
@@ -167,6 +191,98 @@
       dots + xlabels + "</svg>";
   }
 
+  // Donut: check-ins split by source (bot vs PWA), built from the filtered recent list.
+  function renderSourceChart(list) {
+    var box = $("#chart-source");
+    if (!box) return;
+    var counts = { bot: 0, pwa: 0 };
+    (list || []).forEach(function (v) { counts[(v.source === "pwa") ? "pwa" : "bot"]++; });
+    var total = counts.bot + counts.pwa;
+    if (!total) { box.innerHTML = '<div class="empty">Sin check-ins en este rango</div>'; return; }
+    var r = 52, C = 2 * Math.PI * r, cx = 70, cy = 70, f1 = counts.bot / total;
+    var seg = function (color, frac, offsetFrac) {
+      return '<circle cx="' + cx + '" cy="' + cy + '" r="' + r + '" fill="none" stroke="' + color +
+        '" stroke-width="18" stroke-dasharray="' + (frac * C) + ' ' + C + '" stroke-dashoffset="' + (-offsetFrac * C) +
+        '" transform="rotate(-90 ' + cx + ' ' + cy + ')"/>';
+    };
+    box.innerHTML =
+      '<div class="donut-wrap">' +
+      '<svg viewBox="0 0 140 140" width="132" height="132" role="img">' +
+      '<circle cx="' + cx + '" cy="' + cy + '" r="' + r + '" fill="none" stroke="var(--glass-2)" stroke-width="18"/>' +
+      seg("#6366f1", f1, 0) + seg("#22c55e", counts.pwa / total, f1) +
+      '<text x="' + cx + '" y="' + (cy - 1) + '" text-anchor="middle" font-size="26" font-weight="700" fill="var(--strong)">' + total + '</text>' +
+      '<text x="' + cx + '" y="' + (cy + 16) + '" text-anchor="middle" font-size="11" fill="var(--faint)">check-ins</text>' +
+      '</svg>' +
+      '<div class="donut-legend">' +
+        '<div><span class="dot" style="background:#6366f1"></span> Bot <b>' + counts.bot + '</b> <span class="muted">' + Math.round(f1 * 100) + '%</span></div>' +
+        '<div><span class="dot" style="background:#22c55e"></span> App <b>' + counts.pwa + '</b> <span class="muted">' + Math.round((counts.pwa / total) * 100) + '%</span></div>' +
+      '</div></div>';
+  }
+
+  // Bars: check-ins by weekday (Monday-first), from the filtered recent list.
+  function renderWeekdayChart(list) {
+    var box = $("#chart-weekday");
+    if (!box) return;
+    var labels = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
+    var counts = [0, 0, 0, 0, 0, 0, 0];
+    (list || []).forEach(function (v) {
+      var d = new Date(v.timestamp);
+      if (isNaN(d.getTime())) return;
+      counts[(d.getDay() + 6) % 7]++; // JS 0=Sun → Monday-first
+    });
+    var total = counts.reduce(function (a, b) { return a + b; }, 0);
+    if (!total) { box.innerHTML = '<div class="empty">Sin check-ins en este rango</div>'; return; }
+    var max = Math.max.apply(null, counts.concat([1]));
+    box.innerHTML = '<div class="wd-bars">' + counts.map(function (c, i) {
+      var h = Math.max(3, Math.round((c / max) * 100));
+      return '<div class="wd-col"><span class="wd-val">' + (c || "") + '</span>' +
+        '<span class="wd-bar" style="height:' + h + '%"></span>' +
+        '<span class="wd-lbl">' + labels[i] + '</span></div>';
+    }).join("") + '</div>';
+  }
+
+  // Filtered slice of the recent-visits list, per the dashboard filter bar.
+  function filteredRecent() {
+    return (lastRecent || []).filter(function (v) {
+      if (dashFilters.worker && String(v.workerName || v.workerTelegramId || "") !== dashFilters.worker) return false;
+      if (dashFilters.source && (v.source || "bot") !== dashFilters.source) return false;
+      var day = String(v.timestamp || "").slice(0, 10);
+      if (dashFilters.from && day < dashFilters.from) return false;
+      if (dashFilters.to && day > dashFilters.to) return false;
+      return true;
+    });
+  }
+  function fillDashWorkers() {
+    var sel = $("#dash-worker");
+    if (!sel) return;
+    var names = {};
+    (lastRecent || []).forEach(function (v) { var n = v.workerName || v.workerTelegramId; if (n) names[n] = true; });
+    sel.innerHTML = '<option value="">Todos los trabajadores</option>' +
+      Object.keys(names).sort().map(function (n) { return '<option value="' + esc(n) + '">' + esc(n) + "</option>"; }).join("");
+    sel.value = dashFilters.worker;
+  }
+  // Rebuild every filter-aware widget (charts + map + top lists) from the recent list.
+  function renderDashWidgets() {
+    var list = filteredRecent();
+    var byWorker = {}, byPoint = {};
+    list.forEach(function (v) {
+      var w = v.workerName || v.workerTelegramId; if (w) byWorker[w] = (byWorker[w] || 0) + 1;
+      var p = v.pointName || v.pointId; if (p) byPoint[p] = (byPoint[p] || 0) + 1;
+    });
+    renderBarlist("#top-workers", byWorker);
+    renderBarlist("#top-points", byPoint);
+    renderVisitsChart(list);
+    renderSourceChart(list);
+    renderWeekdayChart(list);
+    plotVisits(list);
+    var scope = $("#dash-scope");
+    if (scope) {
+      var active = dashFilters.worker || dashFilters.source || dashFilters.from || dashFilters.to;
+      scope.textContent = (active ? "Filtrado: " : "Mostrando ") + list.length + " de " +
+        (lastRecent || []).length + " check-ins recientes" + (active ? ". Los KPIs de arriba son totales globales." : ".");
+    }
+  }
+
   // Daily coverage per worker: X of Y assigned stops done today, plus the pending list.
   function renderCoverage(list) {
     var el = $("#coverage");
@@ -200,11 +316,10 @@
         sub.textContent = un ? (un + " sin asignar") : "paradas a visitar";
         sub.classList.toggle("warn", un > 0);
       }
-      renderBarlist("#top-workers", s.byWorker);
-      renderBarlist("#top-points", s.byPoint);
       renderCoverage(s.coverage);
-      renderVisitsChart(s.recent);
-      plotVisits(s.recent);
+      lastRecent = s.recent || [];
+      fillDashWorkers();
+      renderDashWidgets();
     } catch (e) { toast(e.message, true); }
     refreshBotBadge();
   }
@@ -629,7 +744,7 @@
     // Reflect the real key + this deployment's URL in the curl example.
     var curl = $("#conn-curl");
     if (curl) {
-      var origin = location.origin || "https://TU-DOMINIO";
+      var origin = location.origin || "https://starx.up.railway.app";
       curl.textContent = 'curl -H "X-API-Key: ' + (key || "TU_CLAVE") + '" \\\n  ' + origin + "/api/v1/visits?limit=500";
     }
   }
@@ -739,6 +854,18 @@
     };
     $("#reload-visits").onclick = loadVisits;
     var dlBtn = $("#download-visits"); if (dlBtn) dlBtn.onclick = downloadVisitsCsv;
+
+    // Dashboard: worker / source / date filters (re-render charts + map from cached recent).
+    var dW = $("#dash-worker"); if (dW) dW.onchange = function () { dashFilters.worker = this.value; renderDashWidgets(); };
+    var dS = $("#dash-source"); if (dS) dS.onchange = function () { dashFilters.source = this.value; renderDashWidgets(); };
+    var dF = $("#dash-from");   if (dF) dF.onchange = function () { dashFilters.from = this.value; renderDashWidgets(); };
+    var dT = $("#dash-to");     if (dT) dT.onchange = function () { dashFilters.to = this.value; renderDashWidgets(); };
+    var dC = $("#dash-clear");
+    if (dC) dC.onclick = function () {
+      dashFilters = { worker: "", source: "", from: "", to: "" };
+      if (dW) dW.value = ""; if (dS) dS.value = ""; if (dF) dF.value = ""; if (dT) dT.value = "";
+      renderDashWidgets();
+    };
 
     // Points: search + worker filter + bulk assign (re-render from cached state.points).
     var pSearch = $("#points-search");

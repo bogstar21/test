@@ -8,7 +8,7 @@
   <link rel="icon" href="/platform/assets/icon.svg">
   <link rel="manifest" href="/platform/manifest.webmanifest">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-  <link rel="stylesheet" href="/platform/assets/app.css?v=9">
+  <link rel="stylesheet" href="/platform/assets/app.css?v=10">
   <script>
     // Apply saved theme before first paint (default light).
     (function () { try { if (localStorage.getItem('starx-theme') === 'dark') document.documentElement.classList.add('dark'); } catch (e) {} })();
@@ -90,10 +90,34 @@
           <div class="card kpi"><div class="lbl"><svg class="ic"><use href="#i-users"/></svg> Trabajadores activos</div><div class="num" id="s-workers">–</div><div class="sub">personal de campo</div></div>
         </div>
 
+        <div class="filterbar mt">
+          <select id="dash-worker"><option value="">Todos los trabajadores</option></select>
+          <select id="dash-source">
+            <option value="">Todas las fuentes</option>
+            <option value="bot">Bot de Telegram</option>
+            <option value="pwa">App (PWA)</option>
+          </select>
+          <label class="date-field">Desde <input id="dash-from" type="date"></label>
+          <label class="date-field">Hasta <input id="dash-to" type="date"></label>
+          <button class="btn ghost sm" id="dash-clear">Limpiar</button>
+        </div>
+        <p class="muted" id="dash-scope" style="margin:-6px 2px 10px;font-size:12px"></p>
+
         <div class="grid mt">
           <div class="card chart-card">
             <p class="ct"><svg class="ic"><use href="#i-chart"/></svg> Visitas por día</p>
             <div class="chart" id="chart-visits"><div class="empty">Sin datos aún</div></div>
+          </div>
+        </div>
+
+        <div class="grid grid-2 mt">
+          <div class="card chart-card">
+            <p class="ct"><svg class="ic"><use href="#i-send"/></svg> Check-ins por fuente</p>
+            <div class="chart-sm" id="chart-source"><div class="empty">Sin datos aún</div></div>
+          </div>
+          <div class="card chart-card">
+            <p class="ct"><svg class="ic"><use href="#i-chart"/></svg> Check-ins por día de la semana</p>
+            <div class="chart-sm" id="chart-weekday"><div class="empty">Sin datos aún</div></div>
           </div>
         </div>
 
@@ -228,6 +252,24 @@
         </div>
 
         <div class="card card-pad mt">
+          <h3><svg class="ic"><use href="#i-import"/></svg> Estructura del Excel/CSV</h3>
+          <p class="desc">Puedes usar cualquier cabecera — al importar asignas cada columna. Ejemplos recomendados:</p>
+          <div class="field">
+            <label>Puntos</label>
+            <pre class="code-block"><code>id,name,address,workerPhone
+P1,Silpo Khreshchatyk,Khreshchatyk St 15,+380671112233
+,ATB Podil,Verkhnii Val St 24,+380677654321</code></pre>
+            <p class="muted">La columna del <b>teléfono del trabajador</b> es opcional: enlaza cada punto con su trabajador asignado.</p>
+          </div>
+          <div class="field">
+            <label>Trabajadores</label>
+            <pre class="code-block"><code>name,phone
+Ivan Petrenko,+380671112233
+Olena Kovalenko,+380677654321</code></pre>
+          </div>
+        </div>
+
+        <div class="card card-pad mt">
           <h3><svg class="ic"><use href="#i-globe"/></svg> App de check-in (PWA)</h3>
           <p class="desc">Permite que tus trabajadores hagan check-in desde el navegador (además del bot). Entran en la pantalla de login con su <b>teléfono</b> (el mismo que cargaste).</p>
           <div class="deploy-head">
@@ -277,7 +319,7 @@
           <div class="field">
             <label>Leer visitas — <code>GET /api/v1/visits?limit=500</code></label>
             <pre class="code-block"><code id="conn-curl">curl -H "X-API-Key: TU_CLAVE" \
-  https://TU-DOMINIO/api/v1/visits?limit=500</code></pre>
+  https://starx.up.railway.app/api/v1/visits?limit=500</code></pre>
           </div>
         </div>
 
@@ -287,23 +329,6 @@
           <button class="btn ghost admin-only" id="setup-btn"><svg class="ic"><use href="#i-sheet"/></svg> Configurar hoja</button>
         </div>
 
-        <div class="card card-pad mt">
-          <h3><svg class="ic"><use href="#i-import"/></svg> Estructura del Excel/CSV</h3>
-          <p class="desc">Puedes usar cualquier cabecera — al importar asignas cada columna. Ejemplos recomendados:</p>
-          <div class="field">
-            <label>Puntos</label>
-            <pre class="code-block"><code>id,name,address,workerPhone
-P1,Silpo Khreshchatyk,Khreshchatyk St 15,+380671112233
-,ATB Podil,Verkhnii Val St 24,+380677654321</code></pre>
-            <p class="muted">La columna del <b>teléfono del trabajador</b> es opcional: enlaza cada punto con su trabajador asignado.</p>
-          </div>
-          <div class="field">
-            <label>Trabajadores</label>
-            <pre class="code-block"><code>name,phone
-Ivan Petrenko,+380671112233
-Olena Kovalenko,+380677654321</code></pre>
-          </div>
-        </div>
       </section>
 
       <!-- ══════════════════ CHECK-IN (TRABAJADOR / PWA) ══════════════════ -->
@@ -363,6 +388,6 @@ Olena Kovalenko,+380677654321</code></pre>
   <div class="toast" id="toast"></div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script src="/platform/assets/app.js?v=9"></script>
+  <script src="/platform/assets/app.js?v=10"></script>
 </body>
 </html>
