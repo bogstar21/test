@@ -6,6 +6,7 @@ const config  = require("../config");
 const { requireAuth, requireRole } = require("../auth");
 const { forTenant } = require("../datasource");
 const { phonesMatch } = require("../util");
+const pending = require("../pending");
 
 function clean(v) { return (v == null ? "" : String(v)).trim().slice(0, 300); }
 function ds(req)  { return forTenant(config.getTenant(req)); }
@@ -43,6 +44,15 @@ function mountWorkerRoutes(app) {
     try { res.json({ workers: await ds(req).listWorkers() }); } catch (e) { fail(res, e); }
   });
 
+  // People who tried to register via the bot with a phone that isn't in the system.
+  r.get("/pending", async (req, res) => {
+    try { res.json({ pending: await pending.list(ds(req)) }); } catch (e) { fail(res, e); }
+  });
+  r.post("/pending/dismiss", requireRole("admin"), async (req, res) => {
+    try { await pending.remove(ds(req), (req.body && req.body.phone) || ""); res.json({ ok: true }); }
+    catch (e) { fail(res, e); }
+  });
+
   r.post("/", requireRole("admin"), async (req, res) => {
     const f = sanitize(req.body);
     const v = validate(f);
@@ -53,6 +63,8 @@ function mountWorkerRoutes(app) {
       const clash = await phoneClash(source, f.phone, null);
       if (clash) return res.status(409).json({ error: "phone_taken", detail: 'Ese teléfono ya lo tiene "' + (clash.name || clash.workerId) + '". Cada trabajador necesita un número único.' });
       await source.addWorker(f);
+      // Adding this worker resolves any pending bot-registration attempt from their phone.
+      if (f.phone) { try { await pending.remove(source, f.phone); } catch (e) {} }
       res.json({ ok: true });
     } catch (e) { fail(res, e); }
   });

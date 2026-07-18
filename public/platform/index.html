@@ -8,7 +8,7 @@
   <link rel="icon" href="/platform/assets/icon.svg">
   <link rel="manifest" href="/platform/manifest.webmanifest">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-  <link rel="stylesheet" href="/platform/assets/app.css?v=12">
+  <link rel="stylesheet" href="/platform/assets/app.css?v=13">
   <script>
     // Apply saved theme before first paint (default light).
     (function () { try { if (localStorage.getItem('starx-theme') === 'dark') document.documentElement.classList.add('dark'); } catch (e) {} })();
@@ -175,6 +175,7 @@
         <div class="filterbar">
           <label class="search"><svg class="ic"><use href="#i-search"/></svg><input id="workers-search" type="search" placeholder="Buscar por nombre, teléfono o ID…"></label>
         </div>
+        <div id="workers-pending"></div>
         <div id="workers-wrap"><div class="empty">Cargando…</div></div>
       </section>
 
@@ -404,6 +405,6 @@
   <div class="toast" id="toast"></div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script src="/platform/assets/app.js?v=12"></script>
+  <script src="/platform/assets/app.js?v=13"></script>
 </body>
 </html>

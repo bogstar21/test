@@ -236,6 +236,11 @@ function attachHandlers(bot) {
       // Unknown number → NOT allowed in. Only workers whose phone the manager has
       // preloaded can register; there is no self-onboarding. This keeps the roster under
       // the company's control (no strangers linking themselves to the bot).
+      // Record the attempt so the manager can see who tried and add them in one click.
+      const attemptName = [msg.from.first_name, msg.from.last_name].filter(Boolean).join(" ").trim()
+        || (msg.from.username ? "@" + msg.from.username : "");
+      try { await require("../pending").add(source(), msg.contact.phone_number, attemptName); }
+      catch (e) { console.error("pending.add error:", e && e.message); }
       bot.sendMessage(msg.chat.id,
         "⚠️ Tu número no está en el sistema.\n\nPide a tu responsable que te dé de alta con *este mismo teléfono* y luego vuelve a pulsar /start.",
         { parse_mode: "Markdown", reply_markup: removeKb });

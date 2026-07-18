@@ -486,8 +486,42 @@
     var hay = (String(w.name || "") + " " + String(w.phone || "") + " " + String(w.telegramId || "") + " " + String(w.workerId || "")).toLowerCase();
     return hay.indexOf(q) !== -1;
   }
+  // Bot-registration attempts from phones that aren't in the roster (see task 4). Shown as
+  // a card above the workers table so the manager can add or dismiss them.
+  async function loadPendingContacts() {
+    var box = $("#workers-pending");
+    if (!box) return;
+    try {
+      var items = (await api("/api/workers/pending")).pending || [];
+      if (!items.length) { box.innerHTML = ""; return; }
+      box.innerHTML = '<div class="card card-pad pending-card">' +
+        '<h3><svg class="ic"><use href="#i-users"/></svg> ' + items.length +
+        (items.length === 1 ? " intento de registro sin dar de alta" : " intentos de registro sin dar de alta") + '</h3>' +
+        '<p class="desc">Abrieron el bot con un teléfono que no está en el sistema. Añádelos para que puedan hacer check-in.</p>' +
+        items.map(function (c) {
+          return '<div class="pending-row"><div class="pending-who"><b>' + esc(c.name || "—") +
+            '</b> <span class="mono">' + esc(c.phone) + '</span></div>' +
+            (state.isAdmin ? '<div class="tbl-actions">' +
+              '<button class="btn sm" data-add-pending="' + esc(c.phone) + '" data-add-pending-name="' + esc(c.name || "") + '">Añadir</button>' +
+              '<button class="btn ghost sm" data-dismiss-pending="' + esc(c.phone) + '">Descartar</button></div>' : "") +
+            '</div>';
+        }).join("") + '</div>';
+    } catch (e) { box.innerHTML = ""; }
+  }
+  function addFromPending(phone, name) {
+    openModal("Añadir trabajador", workerForm({ name: name, phone: phone }), async function () {
+      try { await api("/api/workers", { method: "POST", body: JSON.stringify(workerPayload()) }); closeModal(); toast("Trabajador añadido"); loadWorkers(); }
+      catch (e) { toast(e.message, true); }
+    });
+  }
+  async function dismissPending(phone) {
+    try { await api("/api/workers/pending/dismiss", { method: "POST", body: JSON.stringify({ phone: phone }) }); loadPendingContacts(); }
+    catch (e) { toast(e.message, true); }
+  }
+
   async function loadWorkers() {
     var wrap = $("#workers-wrap");
+    loadPendingContacts();
     try {
       var data = await api("/api/workers");
       state.workers = data.workers;
@@ -844,6 +878,8 @@
       var dp = t.closest("[data-del-point]");   if (dp) return delPoint(+dp.dataset.delPoint);
       var ew = t.closest("[data-edit-worker]"); if (ew) return editWorker(+ew.dataset.editWorker);
       var dw = t.closest("[data-del-worker]");  if (dw) return delWorker(+dw.dataset.delWorker);
+      var apd = t.closest("[data-add-pending]"); if (apd) return addFromPending(apd.dataset.addPending, apd.dataset.addPendingName);
+      var xpd = t.closest("[data-dismiss-pending]"); if (xpd) return dismissPending(xpd.dataset.dismissPending);
     });
 
     // Hide thumbnails that fail to load (bot off / seeded demo without a real photo).
