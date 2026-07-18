@@ -17,6 +17,25 @@
 --     The `alter table ... add column if not exists` statements below add any missing
 --     columns, and the final `notify pgrst, 'reload schema'` refreshes the cache.
 
+-- ── Tenants (companies) — the platform-level registry (NO tenant_id; it IS the list) ──
+-- Multi-company SaaS: each row is a company with its own login, plan and billing state.
+-- The env-configured "default" tenant always exists in the app even if this table is empty.
+create table if not exists public.starx_tenants (
+  id                  text primary key,
+  name                text not null default '',
+  code                text unique,                 -- bot deep-link / PWA company code
+  source              text default 'supabase',
+  sheet_id            text default '',
+  password_hash       text default '',             -- scrypt$salt$hash (never plaintext)
+  plan                text default 'trial',        -- trial | basic | pro | business
+  subscription_status text default 'trialing',     -- trialing | active | past_due | canceled
+  trial_ends_at       timestamptz,
+  stripe_customer_id  text default '',
+  active              boolean default true,
+  created_at          timestamptz default now()
+);
+create index if not exists idx_starx_tenants_code on public.starx_tenants (code);
+
 -- ── Workers ────────────────────────────────────────────────────────────────────
 create table if not exists public.starx_workers (
   pk           bigint generated always as identity (start with 2) primary key,
@@ -106,6 +125,18 @@ create index if not exists idx_starx_points_worker     on public.starx_points (w
 insert into storage.buckets (id, name, public)
 values ('visit-photos', 'visit-photos', true)
 on conflict (id) do nothing;
+
+-- ── Row Level Security (defense in depth) ──────────────────────────────────────────
+-- The server connects with the service_role key, which BYPASSES RLS — so enabling RLS
+-- with no policies changes nothing for the app, but denies the anon/public key any access.
+-- This means an accidentally-leaked anon key (or a future direct-from-browser call) cannot
+-- read another company's data. App-level tenant_id filtering (datasource/supabase.js) stays
+-- the primary boundary; this is the second wall.
+alter table public.starx_tenants  enable row level security;
+alter table public.starx_workers  enable row level security;
+alter table public.starx_points   enable row level security;
+alter table public.starx_visits   enable row level security;
+alter table public.starx_settings enable row level security;
 
 -- ── Reload PostgREST's schema cache ────────────────────────────────────────────────
 -- PostgREST caches the table/column list and can serve a stale copy right after columns

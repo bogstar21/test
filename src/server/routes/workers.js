@@ -3,7 +3,7 @@
 // writes require admin.
 const express = require("express");
 const config  = require("../config");
-const { requireAuth, requireRole } = require("../auth");
+const { requireAuth, requireRole, requireActiveSubscription, quotaError } = require("../auth");
 const { forTenant } = require("../datasource");
 const { phonesMatch } = require("../util");
 const pending = require("../pending");
@@ -53,12 +53,14 @@ function mountWorkerRoutes(app) {
     catch (e) { fail(res, e); }
   });
 
-  r.post("/", requireRole("admin"), async (req, res) => {
+  r.post("/", requireRole("admin"), requireActiveSubscription, async (req, res) => {
     const f = sanitize(req.body);
     const v = validate(f);
     if (v) return res.status(400).json({ error: v });
     if (!f.name && !f.telegramId && !f.phone) return res.status(400).json({ error: "Name, Telegram ID or phone required." });
     try {
+      const q = await quotaError(req, "workers", 1);
+      if (q) return res.status(402).json({ error: "quota_exceeded", detail: q });
       const source = ds(req);
       const clash = await phoneClash(source, f.phone, null);
       if (clash) return res.status(409).json({ error: "phone_taken", detail: 'Ese teléfono ya lo tiene "' + (clash.name || clash.workerId) + '". Cada trabajador necesita un número único.' });

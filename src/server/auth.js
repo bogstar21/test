@@ -52,7 +52,7 @@ function setSessionCookie(res, user) {
 
 // ─── Middleware ────────────────────────────────────────────────────────────────
 function trustedIpUser() {
-  const t = config.TENANTS[0] || {};
+  const t = config.defaultTenant() || {};
   return { email: "ip-trusted", name: "Admin (IP)", role: "admin", tenantId: t.id || "", company: t.name || "", viaIp: true };
 }
 
@@ -98,6 +98,35 @@ function requireRole(...roles) {
   };
 }
 
+// Block writes when the company's subscription is not live (past_due / canceled). Reads
+// still work — data is never destroyed, just frozen until they pay. 402 = Payment Required.
+function requireActiveSubscription(req, res, next) {
+  const tenant = config.getTenant(req);
+  if (config.tenants.canWrite(tenant)) return next();
+  return res.status(402).json({
+    error: "subscription_inactive",
+    detail: "Tu suscripción no está activa. Reactívala para volver a registrar datos (tus datos siguen intactos).",
+  });
+}
+
+// Enforce a plan's row limits before adding rows. `kind` is "workers" or "points"; `adding`
+// is how many new rows. Reads current count via the tenant datasource. Returns an error
+// string if the limit would be exceeded, else null.
+async function quotaError(req, kind, adding) {
+  const tenant = config.getTenant(req);
+  const limits = config.tenants.planLimits(tenant.plan);
+  const max = kind === "points" ? limits.maxPoints : limits.maxWorkers;
+  if (!isFinite(max)) return null;
+  try {
+    const source = require("./datasource").forTenant(tenant);
+    const current = (kind === "points" ? await source.listPoints() : await source.listWorkers()).length;
+    if (current + (adding || 1) > max) {
+      return `Tu plan (${limits.label}) permite hasta ${max} ${kind === "points" ? "puntos" : "trabajadores"}. Mejora el plan para añadir más.`;
+    }
+  } catch (e) { /* if we can't count, don't block */ }
+  return null;
+}
+
 // ─── API-key gate (for the client-facing connector at /api/v1) ───────────────────
 // Separate credential from the platform login. Each company manages its OWN connector
 // key entirely from the platform UI (self-service — no backend access needed); the key
@@ -122,7 +151,7 @@ async function resolveApiKeyTenant(sent) {
   if (!sent) return null;
   const envKey = process.env.INTEGRATION_API_KEY || "";
   if (envKey && safeEqual(sent, envKey)) return config.defaultTenant();
-  for (const t of config.TENANTS) {
+  for (const t of config.allTenants()) {
     const k = await tenantConnectorKey(t);
     if (k && safeEqual(sent, k)) return t;
   }
@@ -145,7 +174,7 @@ async function requireApiKey(req, res, next) {
 }
 
 // ─── Password login (per-tenant) ───────────────────────────────────────────────
-function passwordConfigured() { return config.TENANTS.some(t => t.password); }
+function passwordConfigured() { return config.allTenants().some(t => t.password || t.passwordHash); }
 
 function safeEqual(a, b) {
   const ab = Buffer.from(String(a));
@@ -154,10 +183,11 @@ function safeEqual(a, b) {
   return crypto.timingSafeEqual(ab, bb);
 }
 
+// Match a login password against every company (plaintext env default OR scrypt hash).
 function matchTenant(pw) {
   if (!pw) return null;
-  for (const t of config.TENANTS) {
-    if (t.password && safeEqual(pw, t.password)) return t;
+  for (const t of config.allTenants()) {
+    if (config.tenants.verifyPassword(t, pw)) return t;
   }
   return null;
 }
@@ -181,25 +211,57 @@ function mountAuthRoutes(app) {
   // tenant's `pwa_enabled` setting so a company can turn the PWA on/off from the UI.
   app.post("/auth/worker", async (req, res) => {
     const phone = (req.body && req.body.phone) || "";
+    const code  = (req.body && req.body.code)  || "";
     if (!phone) return res.status(400).json({ error: "no_phone" });
     try {
-      const tenant = config.defaultTenant();
-      const source = require("./datasource").forTenant(tenant);
-      const enabled = String(await source.getSetting("pwa_enabled", "0")) === "1";
-      if (!enabled) return res.status(403).json({ error: "pwa_disabled", detail: "The web check-in app is off. Ask your manager to enable it." });
-
-      const worker = await source.findWorkerByPhone(phone);
-      if (!worker || !worker.active) return res.status(401).json({ error: "not_found", detail: "Phone not found. Ask your manager to add your number." });
+      const { forTenant } = require("./datasource");
+      // Resolve the worker's company: by explicit company code if given, else search every
+      // company's roster by phone (managers preload the phone in their own tenant).
+      let tenant = null, worker = null;
+      if (code) {
+        tenant = config.tenants.byCode(code);
+        if (!tenant) return res.status(404).json({ error: "no_company", detail: "Código de empresa no encontrado." });
+        worker = await forTenant(tenant).findWorkerByPhone(phone);
+      } else {
+        for (const t of config.allTenants()) {
+          try {
+            const w = await forTenant(t).findWorkerByPhone(phone);
+            if (w) { tenant = t; worker = w; break; }
+          } catch (e) { /* skip */ }
+        }
+      }
+      if (!tenant || !worker || !worker.active) {
+        return res.status(401).json({ error: "not_found", detail: "Teléfono no encontrado. Pide a tu responsable que te dé de alta (o usa el código de tu empresa)." });
+      }
+      const enabled = String(await forTenant(tenant).getSetting("pwa_enabled", "0")) === "1";
+      if (!enabled) return res.status(403).json({ error: "pwa_disabled", detail: "La app de check-in está apagada. Pide a tu responsable que la active." });
 
       setSessionCookie(res, {
         email: "worker", name: worker.name || "Worker", role: "worker",
         tenantId: tenant.id, company: tenant.name,
         workerRow: worker.row, telegramId: worker.telegramId,
       });
-      res.json({ ok: true, name: worker.name || "Worker" });
+      res.json({ ok: true, name: worker.name || "Worker", company: tenant.name });
     } catch (e) {
       console.error("/auth/worker error:", e && e.message);
       res.status(500).json({ error: "server_error" });
+    }
+  });
+
+  // Self-service company signup: create a tenant on a 14-day trial and log the owner in.
+  app.post("/auth/signup", async (req, res) => {
+    const name = String((req.body && req.body.company) || "").trim();
+    const password = String((req.body && req.body.password) || "");
+    if (!name || password.length < 6) {
+      return res.status(400).json({ error: "bad_input", detail: "Indica el nombre de la empresa y una contraseña de al menos 6 caracteres." });
+    }
+    try {
+      const tenant = await config.tenants.create({ name, password, plan: "trial", trialDays: 14 });
+      setSessionCookie(res, { email: "admin", name: "Admin", role: "admin", tenantId: tenant.id, company: tenant.name });
+      res.json({ ok: true, code: tenant.code, company: tenant.name });
+    } catch (e) {
+      console.error("/auth/signup error:", e && e.message);
+      res.status(500).json({ error: "server_error", detail: e && e.message });
     }
   });
 
@@ -222,4 +284,4 @@ function notConfiguredPage() {
     '</div></body></html>';
 }
 
-module.exports = { mountAuthRoutes, attachUser, requireAuth, requireRole, requireApiKey, setSessionCookie, verifySession, generateApiKey, CONNECTOR_KEY_SETTING };
+module.exports = { mountAuthRoutes, attachUser, requireAuth, requireRole, requireApiKey, requireActiveSubscription, quotaError, setSessionCookie, verifySession, generateApiKey, CONNECTOR_KEY_SETTING };

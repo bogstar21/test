@@ -35,11 +35,13 @@
 
     <div class="tabs">
       <button type="button" class="tab on" id="tab-mgr">Manager</button>
-      <button type="button" class="tab" id="tab-wrk">Worker</button>
+      <button type="button" class="tab" id="tab-wrk">Trabajador</button>
+      <button type="button" class="tab" id="tab-new">Crear empresa</button>
     </div>
 
     <div class="err" id="err" style="display:none">Wrong password. Try again.</div>
     <div class="err" id="werr" style="display:none"></div>
+    <div class="err" id="serr" style="display:none"></div>
 
     <!-- Manager: password -->
     <form method="POST" action="/auth/login" id="form">
@@ -48,11 +50,23 @@
       <button type="submit">Sign in</button>
     </form>
 
-    <!-- Worker: phone (PWA check-in) -->
+    <!-- New company: self-service signup (14-day trial) -->
+    <form id="sform" class="hide">
+      <label for="s-company">Nombre de tu empresa</label>
+      <input type="text" id="s-company" placeholder="Mi Logística S.L.">
+      <label for="s-pass" style="margin-top:14px">Contraseña de gestor</label>
+      <input type="password" id="s-pass" autocomplete="new-password" placeholder="mínimo 6 caracteres">
+      <button type="submit">Crear empresa y empezar prueba</button>
+      <p style="color:#9aa0a6;font-size:12px;margin:12px 0 0">14 días de prueba gratis, sin tarjeta.</p>
+    </form>
+
+    <!-- Worker: phone (PWA check-in) + optional company code -->
     <form id="wform" class="hide">
-      <label for="phone">Your phone number</label>
+      <label for="phone">Tu número de teléfono</label>
       <input type="tel" id="phone" name="phone" autocomplete="tel" placeholder="+34 600 123 456">
-      <button type="submit">Enter</button>
+      <label for="code" style="margin-top:14px">Código de empresa <span style="opacity:.6">(opcional)</span></label>
+      <input type="text" id="code" name="code" autocomplete="off" placeholder="solo si te lo pidieron">
+      <button type="submit">Entrar</button>
     </form>
   </div>
 
@@ -62,26 +76,49 @@
     var next = p.get("next");
     if (next) document.getElementById("form").action = "/auth/login?next=" + encodeURIComponent(next);
 
-    var tabM = document.getElementById("tab-mgr"), tabW = document.getElementById("tab-wrk");
-    var fM = document.getElementById("form"), fW = document.getElementById("wform");
-    var eM = document.getElementById("err"), eW = document.getElementById("werr");
-    function pick(worker) {
-      tabW.classList.toggle("on", worker); tabM.classList.toggle("on", !worker);
-      fW.classList.toggle("hide", !worker); fM.classList.toggle("hide", worker);
-      eM.style.display = "none"; eW.style.display = "none";
+    var tabM = document.getElementById("tab-mgr"), tabW = document.getElementById("tab-wrk"), tabN = document.getElementById("tab-new");
+    var fM = document.getElementById("form"), fW = document.getElementById("wform"), fS = document.getElementById("sform");
+    var eM = document.getElementById("err"), eW = document.getElementById("werr"), eS = document.getElementById("serr");
+    function pick(which) { // "mgr" | "wrk" | "new"
+      tabM.classList.toggle("on", which === "mgr");
+      tabW.classList.toggle("on", which === "wrk");
+      tabN.classList.toggle("on", which === "new");
+      fM.classList.toggle("hide", which !== "mgr");
+      fW.classList.toggle("hide", which !== "wrk");
+      fS.classList.toggle("hide", which !== "new");
+      eM.style.display = eW.style.display = eS.style.display = "none";
     }
-    tabM.onclick = function () { pick(false); document.getElementById("password").focus(); };
-    tabW.onclick = function () { pick(true); document.getElementById("phone").focus(); };
+    tabM.onclick = function () { pick("mgr"); document.getElementById("password").focus(); };
+    tabW.onclick = function () { pick("wrk"); document.getElementById("phone").focus(); };
+    tabN.onclick = function () { pick("new"); document.getElementById("s-company").focus(); };
+
+    fS.addEventListener("submit", async function (e) {
+      e.preventDefault();
+      eS.style.display = "none";
+      var company = document.getElementById("s-company").value.trim();
+      var pass = document.getElementById("s-pass").value;
+      if (!company || pass.length < 6) { eS.textContent = "Nombre de empresa y contraseña (mín. 6)."; eS.style.display = "block"; return; }
+      try {
+        var res = await fetch("/auth/signup", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ company: company, password: pass }),
+        });
+        var data = await res.json().catch(function () { return {}; });
+        if (!res.ok) { eS.textContent = data.detail || "No se pudo crear la empresa."; eS.style.display = "block"; return; }
+        location.href = "/platform";
+      } catch (err) { eS.textContent = "Error de red. Inténtalo de nuevo."; eS.style.display = "block"; }
+    });
 
     fW.addEventListener("submit", async function (e) {
       e.preventDefault();
       eW.style.display = "none";
       var phone = document.getElementById("phone").value.trim();
+      var code = document.getElementById("code").value.trim();
       if (!phone) return;
       try {
         var res = await fetch("/auth/worker", {
           method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ phone: phone }),
+          body: JSON.stringify({ phone: phone, code: code }),
         });
         var data = await res.json().catch(function () { return {}; });
         if (!res.ok) { eW.textContent = data.detail || "Could not sign in."; eW.style.display = "block"; return; }

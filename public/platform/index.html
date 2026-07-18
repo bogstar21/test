@@ -8,7 +8,7 @@
   <link rel="icon" href="/platform/assets/icon.svg">
   <link rel="manifest" href="/platform/manifest.webmanifest">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-  <link rel="stylesheet" href="/platform/assets/app.css?v=14">
+  <link rel="stylesheet" href="/platform/assets/app.css?v=15">
   <script>
     // Apply saved theme before first paint (default light).
     (function () { try { if (localStorage.getItem('starx-theme') === 'dark') document.documentElement.classList.add('dark'); } catch (e) {} })();
@@ -297,10 +297,18 @@
           <p class="desc">StarX usa <b>un único bot compartido</b>, ya configurado por la plataforma. Tú solo lo enciendes o apagas aquí — no hay tokens que gestionar.</p>
           <ol class="muted" style="margin:8px 0 0; padding-left:20px; line-height:1.9">
             <li>Carga a tus trabajadores con su <b>teléfono</b> (en <b>Trabajadores</b> o por importación/API).</li>
-            <li>El trabajador abre el bot y pulsa <code>/start</code>.</li>
-            <li>Comparte su número de teléfono y queda enlazado automáticamente.</li>
+            <li>El trabajador abre el bot y pulsa <code>/start</code> (o usa el enlace de abajo).</li>
+            <li>Comparte su número de teléfono y queda enlazado a <b>tu empresa</b> automáticamente.</li>
             <li>Pulsa <code>/route</code>, elige una parada y hace su check-in con ubicación y foto.</li>
           </ol>
+          <div class="field" style="margin-top:14px">
+            <label>Enlace de alta para tus trabajadores</label>
+            <div class="key-row">
+              <input id="bot-invite" type="text" readonly placeholder="Se genera al conectar el bot…">
+              <button class="btn ghost sm" id="bot-invite-copy" type="button">Copiar</button>
+            </div>
+            <p class="muted" style="margin-top:6px">Compártelo por WhatsApp/Telegram. Quien lo abra se registrará en <b>tu empresa</b> (código <b id="bot-code">…</b>).</p>
+          </div>
           <p class="muted" style="margin-top:12px">Si el botón <b>Encender bot</b> aparece deshabilitado, el operador de la plataforma aún no ha configurado el token del bot en el servidor.</p>
         </div>
       </section>
@@ -309,6 +317,16 @@
       <section class="view" id="view-import">
         <div class="view-head">
           <div><h1 class="h1">Importar y configurar</h1><p class="lead">Trae tus datos: sube puntos o trabajadores desde Excel/CSV, o prepara tu Google Sheet.</p></div>
+        </div>
+
+        <div class="card card-pad" id="billing-card" style="display:none">
+          <h3><svg class="ic"><use href="#i-chart"/></svg> Tu suscripción</h3>
+          <div class="deploy-head">
+            <span class="dh-ic"><svg class="ic"><use href="#i-chart"/></svg></span>
+            <div><div class="dh-t">Plan <b id="bill-plan">…</b> <span id="bill-status" class="pill off"></span></div><div class="dh-d" id="bill-detail">…</div></div>
+          </div>
+          <div class="toolbar admin-only" id="bill-actions"></div>
+          <p class="muted" id="bill-hint" style="margin-top:8px"></p>
         </div>
 
         <div class="card card-pad">
@@ -485,6 +503,6 @@
   <div class="toast" id="toast"></div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script src="/platform/assets/app.js?v=14"></script>
+  <script src="/platform/assets/app.js?v=15"></script>
 </body>
 </html>

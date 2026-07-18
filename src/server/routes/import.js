@@ -8,7 +8,7 @@
 const express = require("express");
 const XLSX    = require("xlsx");
 const config  = require("../config");
-const { requireAuth, requireRole } = require("../auth");
+const { requireAuth, requireRole, requireActiveSubscription, quotaError } = require("../auth");
 const { forTenant } = require("../datasource");
 
 const MAX_IMPORT_ROWS = 5000;
@@ -41,11 +41,13 @@ function mountImportRoutes(app) {
     }
   });
 
-  r.post("/points", bigJson, async (req, res) => {
+  r.post("/points", requireActiveSubscription, bigJson, async (req, res) => {
     try {
       const rows = (req.body && req.body.rows) || [];
       if (!Array.isArray(rows) || !rows.length) return res.status(400).json({ error: "no_rows" });
       if (rows.length > MAX_IMPORT_ROWS) return res.status(400).json({ error: "too_many_rows" });
+      const q = await quotaError(req, "points", rows.length);
+      if (q) return res.status(402).json({ error: "quota_exceeded", detail: q });
       const written = await forTenant(config.getTenant(req)).appendPoints(rows);
       res.json({ ok: true, written });
     } catch (e) {
@@ -54,11 +56,13 @@ function mountImportRoutes(app) {
     }
   });
 
-  r.post("/workers", bigJson, async (req, res) => {
+  r.post("/workers", requireActiveSubscription, bigJson, async (req, res) => {
     try {
       const rows = (req.body && req.body.rows) || [];
       if (!Array.isArray(rows) || !rows.length) return res.status(400).json({ error: "no_rows" });
       if (rows.length > MAX_IMPORT_ROWS) return res.status(400).json({ error: "too_many_rows" });
+      const q = await quotaError(req, "workers", rows.length);
+      if (q) return res.status(402).json({ error: "quota_exceeded", detail: q });
       const written = await forTenant(config.getTenant(req)).appendWorkers(rows);
       res.json({ ok: true, written });
     } catch (e) {

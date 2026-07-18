@@ -19,10 +19,14 @@ function mountPlatformRoutes(app) {
   const r = express.Router();
   r.use(requireAuth);
 
-  r.get("/me", (req, res) => res.json({
-    name: req.user.name, company: req.user.company,
-    tenantId: req.user.tenantId, role: req.user.role,
-  }));
+  r.get("/me", (req, res) => {
+    const t = config.getTenant(req);
+    res.json({
+      name: req.user.name, company: req.user.company,
+      tenantId: req.user.tenantId, role: req.user.role,
+      code: t && t.code || "",
+    });
+  });
 
   // A tenant always has a usable connector key. Auto-provision one for an admin the first
   // time they look, so the connector is self-service with zero backend access. Returns "".

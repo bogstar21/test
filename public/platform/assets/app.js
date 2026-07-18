@@ -42,7 +42,7 @@
   function statusPill(on) { return on ? '<span class="pill on">activo</span>' : '<span class="pill off">inactivo</span>'; }
   function fmtTime(t) { return esc(String(t || "").replace("T", " ").slice(0, 16)); }
 
-  var state = { role: "", isAdmin: false, points: [], workers: [], visits: [], pointStats: {} };
+  var state = { role: "", isAdmin: false, code: "", points: [], workers: [], visits: [], pointStats: {} };
   // View-level filters (kept between reloads so search/date survive a refresh).
   var filters = {
     pointsQ: "", pointsWorker: "",
@@ -948,6 +948,13 @@
     startBtn.disabled = !configured;
     $("#bot-stop").classList.toggle("hidden", !on || !state.isAdmin);
     setBadge(on);
+
+    // Worker self-enrolment deep-link (needs the running bot's @username + this company's code).
+    var codeEl = $("#bot-code"); if (codeEl) codeEl.textContent = state.code || "—";
+    var invite = $("#bot-invite");
+    if (invite) invite.value = (on && s.username && state.code)
+      ? "https://t.me/" + s.username + "?start=" + state.code
+      : "";
   }
   async function loadBot() {
     try { renderBot(await api("/api/bot/status")); }
@@ -1043,21 +1050,53 @@
       st.textContent = "No se pudo obtener la ubicación. Permite el acceso e inténtalo de nuevo.";
     }, { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 });
   }
+  // ── Offline queue ────────────────────────────────────────────────────────────
+  // In the field there's often no signal. If a check-in fails to reach the server, we
+  // stash it in localStorage and flush it automatically when connectivity returns.
+  var QKEY = "starx-checkin-queue";
+  function queueGet() { try { return JSON.parse(localStorage.getItem(QKEY) || "[]") || []; } catch (e) { return []; } }
+  function queueSet(q) { try { localStorage.setItem(QKEY, JSON.stringify(q)); } catch (e) {} }
+  function queueAdd(body) { var q = queueGet(); q.push(body); queueSet(q); }
+  async function flushQueue() {
+    var q = queueGet();
+    if (!q.length) return;
+    var left = [];
+    for (var i = 0; i < q.length; i++) {
+      try { await api("/api/checkin", { method: "POST", body: JSON.stringify(q[i]) }); }
+      catch (e) { left.push(q[i]); } // keep the ones that still fail (network or geofence)
+    }
+    queueSet(left);
+    var sent = q.length - left.length;
+    if (sent > 0) { toast(sent + " check-in(s) pendientes enviados"); if ($("#view-checkin.active")) loadCheckin(); }
+  }
+
   async function submitCheckin() {
     var pointId = $("#ci-point").value;
     if (!pointId) { toast("Elige una parada.", true); return; }
     if (!checkin.lat || !checkin.lng) { toast("Captura tu ubicación primero.", true); return; }
     var btn = $("#ci-submit"); btn.disabled = true; btn.textContent = "Enviando…";
+    var body = { pointId: pointId, lat: checkin.lat, lng: checkin.lng, note: $("#ci-note").value || "" };
     try {
-      var body = { pointId: pointId, lat: checkin.lat, lng: checkin.lng, note: $("#ci-note").value || "" };
       var file = $("#ci-photo").files[0];
       if (file) { body.photo = await fileToB64(file); body.photoContentType = file.type || "image/jpeg"; }
-      await api("/api/checkin", { method: "POST", body: JSON.stringify(body) });
-      toast("Check-in enviado");
+      // Offline → queue it now, don't lose the visit.
+      if (navigator.onLine === false) {
+        queueAdd(body);
+        toast("Sin conexión: guardado. Se enviará al recuperar señal.");
+      } else {
+        try {
+          await api("/api/checkin", { method: "POST", body: JSON.stringify(body) });
+          toast("Check-in enviado");
+        } catch (e) {
+          // A network failure (TypeError from fetch) → queue; a real server error → surface it.
+          if (e instanceof TypeError) { queueAdd(body); toast("Sin conexión: guardado. Se enviará al recuperar señal."); }
+          else { throw e; }
+        }
+      }
       checkin = { lat: "", lng: "" };
       $("#ci-photo").value = ""; $("#ci-note").value = "";
       $("#ci-geo-status").textContent = "Aún no capturada.";
-      loadCheckin(); // refresh so the just-visited stop shows its "hecho hoy"
+      loadCheckin();
     } catch (e) { toast(e.message, true); }
     finally { btn.disabled = false; btn.innerHTML = '<svg class="ic"><use href="#i-check"/></svg> Enviar check-in'; }
   }
@@ -1107,6 +1146,61 @@
   async function loadSettings() {
     try { renderSettings(await api("/api/settings")); }
     catch (e) { /* ignore for non-critical panel */ }
+    loadBilling();
+  }
+
+  // ── Billing / subscription panel ─────────────────────────────────────────────
+  var PLAN_PRICES = { basic: "Básico", pro: "Pro", business: "Business" };
+  function renderBilling(b) {
+    var card = $("#billing-card");
+    if (!card) return;
+    card.style.display = "";
+    $("#bill-plan").textContent = b.planLabel || b.plan || "—";
+    var status = b.status || "active";
+    var stEl = $("#bill-status");
+    var live = status === "active" || status === "trialing";
+    stEl.className = "pill " + (live ? "on" : "off");
+    stEl.textContent = { active: "activa", trialing: "prueba", past_due: "pago pendiente", canceled: "cancelada" }[status] || status;
+
+    var detail = "";
+    if (status === "trialing" && b.trialEndsAt) {
+      var days = Math.max(0, Math.ceil((Date.parse(b.trialEndsAt) - Date.now()) / 864e5));
+      detail = "Prueba gratuita — " + days + " día(s) restantes.";
+    } else if (!b.canWrite) {
+      detail = "Suscripción inactiva: la cuenta está en solo-lectura. Reactívala para volver a registrar datos.";
+    } else {
+      var lim = b.limits || {};
+      detail = "Límites: " + (lim.maxWorkers == null ? "∞" : lim.maxWorkers) + " trabajadores · " +
+        (lim.maxPoints == null ? "∞" : lim.maxPoints) + " puntos.";
+    }
+    $("#bill-detail").textContent = detail;
+
+    var actions = $("#bill-actions"), hint = $("#bill-hint");
+    if (!b.enabled) {
+      actions.innerHTML = "";
+      hint.textContent = "El cobro no está configurado en este servidor (modo autoalojado).";
+      return;
+    }
+    hint.textContent = "";
+    if (b.hasCustomer) {
+      actions.innerHTML = '<button class="btn" data-bill-portal>Gestionar suscripción</button>';
+    } else {
+      actions.innerHTML = ['basic', 'pro', 'business'].map(function (p) {
+        return '<button class="btn ghost" data-bill-plan="' + p + '">Suscribirme — ' + PLAN_PRICES[p] + '</button>';
+      }).join("");
+    }
+  }
+  async function loadBilling() {
+    try { renderBilling(await api("/api/billing")); }
+    catch (e) { var c = $("#billing-card"); if (c) c.style.display = "none"; }
+  }
+  async function billingCheckout(plan) {
+    try { var r = await api("/api/billing/checkout", { method: "POST", body: JSON.stringify({ plan: plan }) }); if (r.url) location.href = r.url; }
+    catch (e) { toast(e.message, true); }
+  }
+  async function billingPortal() {
+    try { var r = await api("/api/billing/portal", { method: "POST" }); if (r.url) location.href = r.url; }
+    catch (e) { toast(e.message, true); }
   }
   async function togglePwa() {
     var btn = $("#pwa-toggle"); btn.disabled = true;
@@ -1171,6 +1265,8 @@
       var dw = t.closest("[data-del-worker]");  if (dw) return delWorker(+dw.dataset.delWorker);
       var apd = t.closest("[data-add-pending]"); if (apd) return addFromPending(apd.dataset.addPending, apd.dataset.addPendingName);
       var xpd = t.closest("[data-dismiss-pending]"); if (xpd) return dismissPending(xpd.dataset.dismissPending);
+      var bpl = t.closest("[data-bill-plan]"); if (bpl) return billingCheckout(bpl.dataset.billPlan);
+      var bpo = t.closest("[data-bill-portal]"); if (bpo) return billingPortal();
     });
 
     // Hide thumbnails that fail to load (bot off / seeded demo without a real photo).
@@ -1256,6 +1352,12 @@
     // Bot
     $("#bot-start").onclick = startBot;
     $("#bot-stop").onclick = stopBot;
+    var inviteCopy = $("#bot-invite-copy");
+    if (inviteCopy) inviteCopy.onclick = function () {
+      var v = $("#bot-invite"); if (!v || !v.value) { toast("Enciende el bot para generar el enlace.", true); return; }
+      if (navigator.clipboard) navigator.clipboard.writeText(v.value).then(function () { toast("Enlace copiado"); }, function () { v.select(); });
+      else { v.select(); document.execCommand("copy"); toast("Enlace copiado"); }
+    };
 
     // Check-in (worker PWA)
     $("#ci-geo").onclick = captureLocation;
@@ -1297,7 +1399,7 @@
       var me = await api("/api/me");
       $("#company").textContent = me.company ? "· " + me.company : "";
       $("#user").textContent = me.name || "";
-      state.role = me.role; state.isAdmin = me.role === "admin";
+      state.role = me.role; state.isAdmin = me.role === "admin"; state.code = me.code || "";
     } catch (e) { /* api() already redirects on 401 */ }
     applyAdmin();
 
@@ -1314,5 +1416,7 @@
   }
 
   if ("serviceWorker" in navigator) navigator.serviceWorker.register("/platform/assets/sw.js").catch(function () {});
-  document.addEventListener("DOMContentLoaded", init);
+  // Flush any queued offline check-ins when the connection returns (and once on load).
+  window.addEventListener("online", flushQueue);
+  document.addEventListener("DOMContentLoaded", function () { init(); setTimeout(flushQueue, 1500); });
 })();

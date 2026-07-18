@@ -2,7 +2,7 @@
 // Read is open to any logged-in user; writes require the admin role.
 const express = require("express");
 const config  = require("../config");
-const { requireAuth, requireRole } = require("../auth");
+const { requireAuth, requireRole, requireActiveSubscription, quotaError } = require("../auth");
 const { forTenant } = require("../datasource");
 
 function clean(v) { return (v == null ? "" : String(v)).trim().slice(0, 300); }
@@ -35,10 +35,15 @@ function mountPointRoutes(app) {
     try { res.json({ points: await ds(req).listPoints() }); } catch (e) { fail(res, e); }
   });
 
-  r.post("/", requireRole("admin"), async (req, res) => {
+  r.post("/", requireRole("admin"), requireActiveSubscription, async (req, res) => {
     const f = sanitize(req.body);
     if (!f.name && !f.address) return res.status(400).json({ error: "Name or address required." });
-    try { const id = await ds(req).addPoint(f); res.json({ ok: true, id }); } catch (e) { fail(res, e); }
+    try {
+      const q = await quotaError(req, "points", 1);
+      if (q) return res.status(402).json({ error: "quota_exceeded", detail: q });
+      const id = await ds(req).addPoint(f);
+      res.json({ ok: true, id });
+    } catch (e) { fail(res, e); }
   });
 
   // Bulk (re)assign several points to one worker in a single call. Body:

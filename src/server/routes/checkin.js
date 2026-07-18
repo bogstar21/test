@@ -4,7 +4,7 @@
 // (dashboard, export API) reads it exactly like a bot check-in.
 const express = require("express");
 const config  = require("../config");
-const { requireAuth } = require("../auth");
+const { requireAuth, requireActiveSubscription } = require("../auth");
 const { forTenant } = require("../datasource");
 const { localDateStr, visitBelongsToWorker, geofenceOk } = require("../util");
 
@@ -49,7 +49,7 @@ function mountCheckinRoutes(app) {
     }
   });
 
-  r.post("/", bigJson, async (req, res) => {
+  r.post("/", requireActiveSubscription, bigJson, async (req, res) => {
     try {
       const b = req.body || {};
       const pointId = str(b.pointId).trim();

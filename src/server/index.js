@@ -16,6 +16,7 @@ const { mountVisitRoutes }    = require("./routes/visits");
 const { mountImportRoutes }   = require("./routes/import");
 const { mountConnectRoutes }  = require("./routes/connect");
 const { mountCheckinRoutes }  = require("./routes/checkin");
+const { mountBillingRoutes }  = require("./routes/billing");
 const { mountBotRoutes }      = require("./routes/bot");
 
 function createApp(deps = {}) {
@@ -30,8 +31,10 @@ function createApp(deps = {}) {
   // Body parsing. Small 2 MB JSON for most routes; the import endpoints declare their
   // own 50 MB parser for base64 uploads, so skip the global parser on those paths.
   const smallJson = express.json({ limit: "2mb" });
-  const UPLOAD_PATHS = /^\/api\/(?:import\/(?:parse|points|workers)|checkin)$/;
-  app.use((req, res, next) => (UPLOAD_PATHS.test(req.path) ? next() : smallJson(req, res, next)));
+  // Skip the global JSON parser on: base64 upload endpoints AND the Stripe webhook (which
+  // needs the RAW body to verify its signature — see routes/billing.js).
+  const RAW_PATHS = /^\/api\/(?:import\/(?:parse|points|workers)|checkin|billing\/webhook)$/;
+  app.use((req, res, next) => (RAW_PATHS.test(req.path) ? next() : smallJson(req, res, next)));
   app.use(express.urlencoded({ extended: false })); // login form posts
   app.use(cookieParser());
   app.use(attachUser);
@@ -58,6 +61,7 @@ function createApp(deps = {}) {
   mountVisitRoutes(app);        // /api/visits, /api/stats
   mountImportRoutes(app);       // /api/import/*
   mountCheckinRoutes(app);      // /api/checkin (worker PWA)
+  mountBillingRoutes(app);      // /api/billing/* (Stripe subscription — optional)
   mountBotRoutes(app);          // /api/bot/status, /start, /stop
   mountPublicRoutes(app, deps); // /health, /
 
@@ -67,6 +71,9 @@ function createApp(deps = {}) {
 
 function startServer(deps = {}) {
   const app = createApp(deps);
+  // Load companies from the platform registry (starx_tenants) into the in-memory cache
+  // before serving. No-op without a platform DB (memory/sheets keep the env default).
+  require("./tenants").reload().catch(e => console.error("tenants.reload:", e && e.message));
   app.listen(config.PORT, () => {
     console.log(`🌐 StarX platform on :${config.PORT}`);
     if (!config.PLATFORM_PASSWORD) console.log("⚠️  PLATFORM_PASSWORD not set — set it in Railway to enable login.");

@@ -15,14 +15,42 @@ const { localDateStr, visitBelongsToWorker, geofenceOk } = require("../util");
 // Attach every handler to a ready TelegramBot instance. Called by the bot manager
 // right after it creates the bot (see src/server/bot/manager.js).
 function attachHandlers(bot) {
-  // Single-tenant MVP: the bot serves the default tenant's data.
-  function source() { return forTenant(config.defaultTenant()); }
-
   // ── In-memory per-user state ─────────────────────────────────────────────
+  // Each Telegram user is resolved to a COMPANY (tenant). One shared bot serves them all.
   const states = new Map();
   const getState   = id => states.get(id) || { step: "idle" };
   const setState   = (id, s) => states.set(id, { ...getState(id), ...s });
   const clearState = id => states.delete(id);
+
+  // Datasource for the tenant currently attached to this user's state (null if unresolved).
+  function srcOf(userId) {
+    const st = getState(userId);
+    const t = st.tenantId ? config.tenants.byId(st.tenantId) : null;
+    return t ? forTenant(t) : null;
+  }
+
+  // Find which company a Telegram id belongs to (already-registered worker). Searches every
+  // tenant's roster; caches the tenant on the user's state so later steps skip the scan.
+  async function resolveByTelegram(userId) {
+    for (const t of config.allTenants()) {
+      try {
+        const w = (await forTenant(t).listWorkers())
+          .find(x => String(x.telegramId) === String(userId) && x.active);
+        if (w) { setState(userId, { tenantId: t.id }); return { tenant: t, worker: w }; }
+      } catch (e) { /* skip a tenant whose datasource is unavailable */ }
+    }
+    return null;
+  }
+  // Find which company a phone belongs to (for first-time linking by shared contact).
+  async function resolveByPhone(phone) {
+    for (const t of config.allTenants()) {
+      try {
+        const w = await forTenant(t).findWorkerByPhone(phone);
+        if (w) return { tenant: t, worker: w };
+      } catch (e) { /* skip */ }
+    }
+    return null;
+  }
 
   // ── Keyboards ────────────────────────────────────────────────────────────
   // Reply keyboards carry a Cancel option during the flow so a worker is never stuck.
@@ -33,18 +61,20 @@ function attachHandlers(bot) {
   // Button labels reused in message handlers (keep in one place so they can't drift).
   const BTN_DONE = "✅ Terminar", BTN_CANCEL = "❌ Cancelar";
 
+  // Resolve the worker behind a Telegram id (across all companies) and remember the tenant.
   async function findWorker(telegramId) {
-    const workers = await source().listWorkers();
-    return workers.find(w => String(w.telegramId) === String(telegramId) && w.active) || null;
+    const res = await resolveByTelegram(telegramId);
+    return res ? res.worker : null;
   }
 
   // This worker's check-in history in one pass: which stops are done TODAY (to mark them
   // ✅) and how many times each stop has been visited all-time (to surface the most-used
   // stops first). Attributed by the stable workerId (telegramId as fallback for older
   // visits); "today" follows the company timezone.
-  async function workerVisitStats(worker) {
+  async function workerVisitStats(userId, worker) {
     const today = localDateStr(null, config.TIMEZONE);
-    const visits = await source().listVisits({ limit: 2000 });
+    const src = srcOf(userId);
+    const visits = src ? await src.listVisits({ limit: 2000 }) : [];
     const visitedToday = new Set();
     const usage = {}; // pointId → all-time count for this worker
     for (const v of visits) {
@@ -56,27 +86,36 @@ function attachHandlers(bot) {
     return { visitedToday, usage };
   }
 
-  // Prompt an unregistered user to share their phone so we can link them by phone
-  // (holodBot-style registration): worker is precargado with a phone, sharing the
-  // Telegram contact links their telegram_id to that row.
-  function askForContact(chatId) {
+  // Prompt an unregistered user to share their phone so we can link them by phone.
+  function askForContact(chatId, company) {
+    const who = company ? ` de *${esc(company)}*` : "";
     return bot.sendMessage(chatId,
-      "👋 Bienvenido a *StarX*.\n\nPara registrarte, comparte tu número de teléfono con el botón de abajo y te enlazaré con tu perfil.",
+      `👋 Bienvenido a *StarX*${who}.\n\nPara registrarte, comparte tu número de teléfono con el botón de abajo y te enlazaré con tu perfil.`,
       { parse_mode: "Markdown", reply_markup: contactKb });
   }
 
   function esc(s) { return String(s == null ? "" : s).replace(/([_*\[\]()`])/g, "\\$1"); }
 
-  // ── /start ─────────────────────────────────────────────────────────────────
-  bot.onText(/^\/start/, async (msg) => {
+  // ── /start [código-empresa] ──────────────────────────────────────────────────
+  // A deep-link (t.me/<bot>?start=<code>) tells us which company a NEW worker belongs to.
+  bot.onText(/^\/start(?:\s+(\S+))?/, async (msg, match) => {
     if (msg.chat.type !== "private") return;
     const userId = msg.from.id;
+    const code = match && match[1] ? String(match[1]).trim() : "";
     try {
       const worker = await findWorker(userId);
-      if (!worker) return askForContact(msg.chat.id);
-      bot.sendMessage(msg.chat.id,
-        `👋 ¡Hola *${esc(worker.name || "compañero")}*!\n\nPulsa /route para ver tus paradas y empezar a hacer check-in.`,
-        { parse_mode: "Markdown" });
+      if (worker) {
+        return bot.sendMessage(msg.chat.id,
+          `👋 ¡Hola *${esc(worker.name || "compañero")}*!\n\nPulsa /route para ver tus paradas y empezar a hacer check-in.`,
+          { parse_mode: "Markdown" });
+      }
+      // Not registered yet. If they arrived via a company deep-link, remember that company
+      // so their shared contact is linked to the right roster.
+      if (code) {
+        const t = config.tenants.byCode(code);
+        if (t) { setState(userId, { regTenantId: t.id }); return askForContact(msg.chat.id, t.name); }
+      }
+      return askForContact(msg.chat.id);
     } catch (e) {
       bot.sendMessage(msg.chat.id, "⚠️ No pude conectar con la base de datos. Inténtalo de nuevo en un momento.");
       console.error("/start error:", e.message);
@@ -99,11 +138,13 @@ function attachHandlers(bot) {
   async function sendRoute(chatId, userId, query) {
     const worker = await findWorker(userId);
     if (!worker) return askForContact(chatId);
+    const src = srcOf(userId);
+    if (!src) return askForContact(chatId);
 
-    let points = (await source().listPointsForWorker(worker.workerId)).filter(p => p.active);
+    let points = (await src.listPointsForWorker(worker.workerId)).filter(p => p.active);
     if (!points.length) return bot.sendMessage(chatId, "Todavía no tienes paradas asignadas. Pídele a tu responsable que te las asigne.");
 
-    const { visitedToday: visited, usage } = await workerVisitStats(worker);
+    const { visitedToday: visited, usage } = await workerVisitStats(userId, worker);
     // Most-used stops first so the 5 shown by default are the ones this worker visits most
     // (stable order for ties). Search still spans the whole list.
     points = points.slice().sort((a, b) => (usage[String(b.id)] || 0) - (usage[String(a.id)] || 0));
@@ -224,25 +265,34 @@ function attachHandlers(bot) {
       const already = await findWorker(userId);
       if (already) return bot.sendMessage(msg.chat.id, `✅ Ya estás registrado como *${esc(already.name)}*. Pulsa /route.`, { parse_mode: "Markdown", reply_markup: removeKb });
 
-      const worker = await source().findWorkerByPhone(msg.contact.phone_number);
-      if (worker) {
-        // Known worker → link this Telegram account to their profile.
-        await source().linkWorkerTelegram(worker.row, userId);
+      // Which company does this phone belong to? Prefer the deep-link company they arrived
+      // through; otherwise search every roster by phone (the manager preloaded it somewhere).
+      const st = getState(userId);
+      let hit = null;
+      if (st.regTenantId) {
+        const t = config.tenants.byId(st.regTenantId);
+        const w = t ? await forTenant(t).findWorkerByPhone(msg.contact.phone_number) : null;
+        if (w) hit = { tenant: t, worker: w };
+      }
+      if (!hit) hit = await resolveByPhone(msg.contact.phone_number);
+
+      if (hit) {
+        // Known worker → link this Telegram account to their profile, in THEIR company.
+        await forTenant(hit.tenant).linkWorkerTelegram(hit.worker.row, userId);
+        setState(userId, { tenantId: hit.tenant.id });
         return bot.sendMessage(msg.chat.id,
-          `✅ ¡Registrado como *${esc(worker.name || "trabajador")}*!\n\nPulsa /route para ver tus paradas y empezar a hacer check-in.`,
+          `✅ ¡Registrado como *${esc(hit.worker.name || "trabajador")}* en *${esc(hit.tenant.name)}*!\n\nPulsa /route para ver tus paradas y empezar a hacer check-in.`,
           { parse_mode: "Markdown", reply_markup: removeKb });
       }
 
-      // Unknown number → NOT allowed in. Only workers whose phone the manager has
-      // preloaded can register; there is no self-onboarding. This keeps the roster under
-      // the company's control (no strangers linking themselves to the bot).
-      // Record the attempt so the manager can see who tried and add them in one click.
+      // Unknown number → NOT allowed in (roster-controlled; no self-onboarding). Record the
+      // attempt against the deep-link company if we know it, so its manager can add them.
       const attemptName = [msg.from.first_name, msg.from.last_name].filter(Boolean).join(" ").trim()
         || (msg.from.username ? "@" + msg.from.username : "");
-      try { await require("../pending").add(source(), msg.contact.phone_number, attemptName); }
-      catch (e) { console.error("pending.add error:", e && e.message); }
+      const regT = st.regTenantId ? config.tenants.byId(st.regTenantId) : null;
+      if (regT) { try { await require("../pending").add(forTenant(regT), msg.contact.phone_number, attemptName); } catch (e) {} }
       bot.sendMessage(msg.chat.id,
-        "⚠️ Tu número no está en el sistema.\n\nPide a tu responsable que te dé de alta con *este mismo teléfono* y luego vuelve a pulsar /start.",
+        "⚠️ Tu número no está en el sistema.\n\nPide a tu responsable que te dé de alta con *este mismo teléfono*, o que te pase el *enlace de tu empresa*, y vuelve a pulsar /start.",
         { parse_mode: "Markdown", reply_markup: removeKb });
     } catch (e) {
       console.error("contact/register error:", e.message);
@@ -287,7 +337,9 @@ function attachHandlers(bot) {
       if (st.step !== "waiting_photos") return bot.sendMessage(msg.chat.id, "No hay nada que terminar. Pulsa /route para empezar.", { reply_markup: removeKb });
       try {
         const worker = st.worker || await findWorker(userId);
-        const visitId = await source().addVisit({
+        const src = srcOf(userId);
+        if (!src) return bot.sendMessage(msg.chat.id, "⚠️ Sesión caducada. Pulsa /route otra vez.", { reply_markup: removeKb });
+        const visitId = await src.addVisit({
           timestamp: new Date().toISOString(),
           workerId: worker ? worker.workerId : "",
           workerTelegramId: String(userId),
@@ -300,7 +352,7 @@ function attachHandlers(bot) {
           note: "",
         });
         // First check-in fixes the point's coordinates (only if still empty).
-        try { await source().ensurePointLocation(st.pointId, st.lat, st.lng); }
+        try { await src.ensurePointLocation(st.pointId, st.lat, st.lng); }
         catch (e) { console.error("ensurePointLocation error:", e.message); }
         clearState(userId);
         bot.sendMessage(msg.chat.id,
