@@ -55,7 +55,8 @@ function makeSupabaseSource(tenant) {
 
   // ── Workers ──────────────────────────────────────────────────────────────────
   async function listWorkers() {
-    const { data, error } = await db().from(T_WORKERS).select("*").order("pk", { ascending: true });
+    const { data, error } = await db().from(T_WORKERS).select("*")
+      .eq("tenant_id", tenantId).order("pk", { ascending: true });
     ok(error);
     return (data || []).map(r => ({
       row: r.pk,
@@ -132,7 +133,8 @@ function makeSupabaseSource(tenant) {
 
   // ── Points ───────────────────────────────────────────────────────────────────
   async function listPoints() {
-    const { data, error } = await db().from(T_POINTS).select("*").order("pk", { ascending: true });
+    const { data, error } = await db().from(T_POINTS).select("*")
+      .eq("tenant_id", tenantId).order("pk", { ascending: true });
     ok(error);
     return (data || []).map(r => ({
       row: r.pk,
@@ -206,7 +208,8 @@ function makeSupabaseSource(tenant) {
   // Set a point's coords the first time it's checked in (only if still empty).
   async function ensurePointLocation(pointId, lat, lng) {
     if (!pointId || !lat || !lng) return false;
-    const { data, error } = await db().from(T_POINTS).select("pk,lat,lng").eq("id", pointId).limit(1);
+    const { data, error } = await db().from(T_POINTS).select("pk,lat,lng")
+      .eq("tenant_id", tenantId).eq("id", pointId).limit(1);
     ok(error);
     const p = (data || [])[0];
     if (!p || (str(p.lat).trim() && str(p.lng).trim())) return false;
@@ -250,7 +253,7 @@ function makeSupabaseSource(tenant) {
     opts = opts || {};
     const limit = Math.min(opts.limit || MAX_ROWS, MAX_ROWS);
     const { data, error } = await db().from(T_VISITS)
-      .select("*").order("timestamp", { ascending: false }).limit(limit);
+      .select("*").eq("tenant_id", tenantId).order("timestamp", { ascending: false }).limit(limit);
     ok(error);
     return (data || []).map(r => ({
       timestamp: str(r.timestamp),
