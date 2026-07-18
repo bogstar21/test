@@ -16,7 +16,13 @@
     var res = await fetch(path, Object.assign({ headers: { "Content-Type": "application/json" } }, opts));
     if (res.status === 401) { location.href = "/platform/login"; throw new Error("unauthorized"); }
     var data = await res.json().catch(function () { return {}; });
-    if (!res.ok) throw new Error(data.error || ("HTTP " + res.status));
+    if (!res.ok) {
+      // Prefer the human-readable `detail` (e.g. the geofence "estás a X m…" message)
+      // over the machine code so toasts read naturally. Keep both on the error.
+      var err = new Error(data.detail || data.error || ("HTTP " + res.status));
+      err.code = data.error; err.detail = data.detail;
+      throw err;
+    }
     return data;
   }
 
@@ -36,7 +42,7 @@
   function statusPill(on) { return on ? '<span class="pill on">activo</span>' : '<span class="pill off">inactivo</span>'; }
   function fmtTime(t) { return esc(String(t || "").replace("T", " ").slice(0, 16)); }
 
-  var state = { role: "", isAdmin: false, points: [], workers: [], visits: [] };
+  var state = { role: "", isAdmin: false, points: [], workers: [], visits: [], pointStats: {} };
   // View-level filters (kept between reloads so search/date survive a refresh).
   var filters = {
     pointsQ: "", pointsWorker: "",
@@ -61,11 +67,25 @@
   function closeModal() { $("#modal").classList.add("hidden"); modalSave = null; }
 
   // ── Map (Leaflet) ──────────────────────────────────────────────────────────
-  var map = null, markers = null;
+  // Flat, minimal basemap from CARTO — light (near-white) or dark (near-black) to match
+  // the app theme. No API key needed.
+  var map = null, markers = null, tileLayer = null;
+  function tileUrl() {
+    var dark = document.documentElement.classList.contains("dark");
+    return "https://{s}.basemaps.cartocdn.com/" + (dark ? "dark_all" : "light_all") + "/{z}/{x}/{y}.png";
+  }
+  function applyMapTheme() {
+    if (!map || typeof L === "undefined") return;
+    if (tileLayer) map.removeLayer(tileLayer);
+    tileLayer = L.tileLayer(tileUrl(), {
+      maxZoom: 19, subdomains: "abcd",
+      attribution: '© <a href="https://openstreetmap.org">OpenStreetMap</a> © <a href="https://carto.com/attributions">CARTO</a>',
+    }).addTo(map);
+  }
   function ensureMap() {
     if (map || typeof L === "undefined") return;
-    map = L.map("map").setView([40.4, -3.7], 5);
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19, attribution: "© OpenStreetMap" }).addTo(map);
+    map = L.map("map", { zoomControl: true, attributionControl: true }).setView([40.4, -3.7], 5);
+    applyMapTheme();
     markers = L.layerGroup().addTo(map);
   }
   var SRC_COLOR = { bot: "#6366f1", pwa: "#22c55e" };
@@ -283,26 +303,6 @@
     }
   }
 
-  // Daily coverage per worker: X of Y assigned stops done today, plus the pending list.
-  function renderCoverage(list) {
-    var el = $("#coverage");
-    if (!el) return;
-    var rows = (list || []).filter(function (c) { return c.active && c.assigned > 0; });
-    if (!rows.length) { el.innerHTML = '<div class="empty">Aún no hay paradas asignadas a trabajadores.</div>'; return; }
-    rows.sort(function (a, b) { return b.assigned - a.assigned; });
-    el.innerHTML = rows.map(function (c) {
-      var pct = c.assigned ? Math.round((c.visitedToday / c.assigned) * 100) : 0;
-      var pend = c.pending.length
-        ? "Pendiente: " + c.pending.map(function (p) { return esc(p.name); }).join(", ")
-        : "Todo cubierto hoy";
-      return '<div class="bl-row" style="flex-wrap:wrap">' +
-        '<span class="bl-name">' + esc(c.workerName) + '</span>' +
-        '<span class="bl-track"><span class="bl-fill" style="width:' + Math.max(4, pct) + '%"></span></span>' +
-        '<span class="bl-val">' + c.visitedToday + "/" + c.assigned + '</span>' +
-        '<div class="muted" style="flex-basis:100%;margin-top:2px;font-size:12px">' + pend + '</div></div>';
-    }).join("");
-  }
-
   async function loadDashboard() {
     try {
       var s = await api("/api/stats");
@@ -316,7 +316,6 @@
         sub.textContent = un ? (un + " sin asignar") : "paradas a visitar";
         sub.classList.toggle("warn", un > 0);
       }
-      renderCoverage(s.coverage);
       lastRecent = s.recent || [];
       fillDashWorkers();
       renderDashWidgets();
@@ -387,6 +386,19 @@
       state.points = data.points;
       // Load workers too so the assign dropdown (and the column below) can name them.
       try { state.workers = (await api("/api/workers")).workers || state.workers; } catch (e) {}
+      // Per-point activity (visit count + last visit) for the "Actividad" column.
+      try {
+        var vis = (await api("/api/visits?limit=5000")).visits || [];
+        var stats = {};
+        vis.forEach(function (v) {
+          var pid = String(v.pointId || "");
+          if (!pid) return;
+          var s = stats[pid] || (stats[pid] = { count: 0, last: "" });
+          s.count++;
+          if (String(v.timestamp || "") > s.last) s.last = String(v.timestamp || "");
+        });
+        state.pointStats = stats;
+      } catch (e) { state.pointStats = state.pointStats || {}; }
       fillWorkerSelects();
       loadPointsFromState();
     } catch (e) { $("#points-wrap").innerHTML = '<div class="card card-pad"><div class="empty">' + esc(e.message) + "</div></div>"; }
@@ -401,17 +413,23 @@
       if (!rows.length) { wrap.innerHTML = '<div class="card card-pad"><div class="empty">Ningún punto coincide con el filtro.</div></div>'; updateBulkbar(); return; }
       var heads = [];
       if (state.isAdmin) heads.push("");
-      heads = heads.concat(["Nombre", "Dirección", "Trabajador", "Geo", "Lat", "Lng", "Estado"]);
+      heads = heads.concat(["Nombre", "Dirección", "Trabajador", "Actividad", "Geo", "Lat", "Lng", "Estado"]);
       if (state.isAdmin) heads.push("Acciones");
+      var stats = state.pointStats || {};
       wrap.innerHTML = tableWrap(heads, rows.map(function (p) {
         var geo = p.geolocated
           ? '<span class="pill on">sí</span>'
           : '<span class="pill off">pendiente</span>';
         var worker = p.workerName ? esc(p.workerName) : '<span class="muted">— sin asignar —</span>';
+        var st = stats[String(p.id)] || { count: 0, last: "" };
+        var activity = st.count
+          ? '<b>' + st.count + '</b> ' + (st.count === 1 ? "visita" : "visitas") +
+            '<div class="muted" style="font-size:11.5px">última ' + esc(String(st.last).slice(0, 10)) + '</div>'
+          : '<span class="muted">sin visitas</span>';
         var check = state.isAdmin
           ? '<td data-label=""><input type="checkbox" class="row-check" data-check-point="' + p.row + '"' + (selectedPoints[p.row] ? " checked" : "") + "></td>"
           : "";
-        return "<tr>" + check + '<td data-label="Nombre">' + esc(p.name) + '</td><td data-label="Dirección" class="muted">' + esc(p.address) + '</td><td data-label="Trabajador">' + worker + '</td><td data-label="Geo">' + geo + '</td><td data-label="Lat" class="mono">' + esc(p.lat) + '</td><td data-label="Lng" class="mono">' + esc(p.lng) + '</td><td data-label="Estado">' + statusPill(p.active) + "</td>" +
+        return "<tr>" + check + '<td data-label="Nombre">' + esc(p.name) + '</td><td data-label="Dirección" class="muted">' + esc(p.address) + '</td><td data-label="Trabajador">' + worker + '</td><td data-label="Actividad">' + activity + '</td><td data-label="Geo">' + geo + '</td><td data-label="Lat" class="mono">' + esc(p.lat) + '</td><td data-label="Lng" class="mono">' + esc(p.lng) + '</td><td data-label="Estado">' + statusPill(p.active) + "</td>" +
           (state.isAdmin ? '<td data-label="Acciones"><div class="tbl-actions"><button class="btn ghost sm" data-edit-point="' + p.row + '">Editar</button><button class="btn danger sm" data-del-point="' + p.row + '">Borrar</button></div></td>' : "") +
           "</tr>";
       }).join(""), true);
@@ -796,7 +814,7 @@
     var dark = document.documentElement.classList.toggle("dark");
     try { localStorage.setItem("starx-theme", dark ? "dark" : "light"); } catch (e) {}
     setThemeIcon(dark);
-    if (map) setTimeout(function () { map.invalidateSize(); }, 60);
+    if (map) { applyMapTheme(); setTimeout(function () { map.invalidateSize(); }, 60); }
   }
 
   async function init() {

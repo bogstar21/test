@@ -8,7 +8,7 @@
   <link rel="icon" href="/platform/assets/icon.svg">
   <link rel="manifest" href="/platform/manifest.webmanifest">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-  <link rel="stylesheet" href="/platform/assets/app.css?v=10">
+  <link rel="stylesheet" href="/platform/assets/app.css?v=12">
   <script>
     // Apply saved theme before first paint (default light).
     (function () { try { if (localStorage.getItem('starx-theme') === 'dark') document.documentElement.classList.add('dark'); } catch (e) {} })();
@@ -132,12 +132,6 @@
           </div>
         </div>
 
-        <div class="section-title"><svg class="ic"><use href="#i-check"/></svg> Cobertura de hoy por trabajador</div>
-        <div class="card chart-card">
-          <p class="ct"><svg class="ic"><use href="#i-users"/></svg> Paradas hechas hoy sobre las asignadas</p>
-          <div class="barlist" id="coverage"><div class="empty">Sin datos aún</div></div>
-        </div>
-
         <div class="section-title"><svg class="ic"><use href="#i-map"/></svg> Últimos check-ins en el mapa</div>
         <div class="card chart-card"><div id="map"></div></div>
 
@@ -252,20 +246,42 @@
         </div>
 
         <div class="card card-pad mt">
-          <h3><svg class="ic"><use href="#i-import"/></svg> Estructura del Excel/CSV</h3>
-          <p class="desc">Puedes usar cualquier cabecera — al importar asignas cada columna. Ejemplos recomendados:</p>
+          <h3><svg class="ic"><use href="#i-sheet"/></svg> ¿Cómo preparar tu Excel?</h3>
+          <p class="desc">No necesitas cabeceras exactas ni saber de informática: al subir el archivo eliges qué columna es cada cosa. Así puede verse tu Excel — puedes copiar estos ejemplos:</p>
+
           <div class="field">
-            <label>Puntos</label>
-            <pre class="code-block"><code>id,name,address,workerPhone
-P1,Silpo Khreshchatyk,Khreshchatyk St 15,+380671112233
-,ATB Podil,Verkhnii Val St 24,+380677654321</code></pre>
-            <p class="muted">La columna del <b>teléfono del trabajador</b> es opcional: enlaza cada punto con su trabajador asignado.</p>
+            <label><svg class="ic"><use href="#i-pin"/></svg> Puntos (las paradas a visitar)</label>
+            <div class="xls-wrap">
+              <table class="xls-example">
+                <thead><tr>
+                  <th>Nombre <span class="tag req">obligatorio</span></th>
+                  <th>Dirección <span class="tag req">obligatorio</span></th>
+                  <th>Teléfono del trabajador <span class="tag opt">opcional</span></th>
+                </tr></thead>
+                <tbody>
+                  <tr><td>Silpo Khreshchatyk</td><td>Khreshchatyk St 15</td><td>+380671112233</td></tr>
+                  <tr><td>ATB Podil</td><td>Verkhnii Val St 24</td><td>+380677654321</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <p class="muted">Si añades el <b>teléfono del trabajador</b>, la parada queda asignada a esa persona automáticamente. Las coordenadas se rellenan solas en el primer check-in.</p>
           </div>
+
           <div class="field">
-            <label>Trabajadores</label>
-            <pre class="code-block"><code>name,phone
-Ivan Petrenko,+380671112233
-Olena Kovalenko,+380677654321</code></pre>
+            <label><svg class="ic"><use href="#i-users"/></svg> Trabajadores (tu personal de campo)</label>
+            <div class="xls-wrap">
+              <table class="xls-example">
+                <thead><tr>
+                  <th>Nombre <span class="tag req">obligatorio</span></th>
+                  <th>Teléfono <span class="tag req">obligatorio</span></th>
+                </tr></thead>
+                <tbody>
+                  <tr><td>Ivan Petrenko</td><td>+380671112233</td></tr>
+                  <tr><td>Olena Kovalenko</td><td>+380677654321</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <p class="muted">El <b>teléfono</b> es la clave: cuando el trabajador comparte su número en el bot, se enlaza con esta ficha. Escríbelo con prefijo de país (ej. <b>+34…</b>).</p>
           </div>
         </div>
 
@@ -388,6 +404,6 @@ Olena Kovalenko,+380677654321</code></pre>
   <div class="toast" id="toast"></div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script src="/platform/assets/app.js?v=10"></script>
+  <script src="/platform/assets/app.js?v=12"></script>
 </body>
 </html>

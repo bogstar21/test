@@ -324,6 +324,17 @@ a:hover { text-decoration: underline; }
 .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12.5px; color: var(--dim); }
 .tbl-actions { display: flex; gap: 8px; }
 
+/* Friendly Excel/CSV example tables (shown on the Import screen). */
+.xls-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: var(--radius); background: var(--glass); }
+.xls-example { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 340px; }
+.xls-example th { text-align: left; white-space: nowrap; padding: 10px 14px; background: var(--th-bg); border-bottom: 1px solid var(--border); color: var(--strong); font-weight: 600; font-size: 12.5px; }
+.xls-example td { padding: 9px 14px; border-bottom: 1px solid var(--border); color: var(--dim); }
+.xls-example tbody tr:last-child td { border-bottom: 0; }
+.xls-example .tag { display: inline-block; margin-left: 6px; padding: 1px 7px; border-radius: 999px; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em; vertical-align: middle; }
+.xls-example .tag.req { background: var(--accent-soft); color: var(--accent); }
+.xls-example .tag.opt { background: var(--glass-2); color: var(--faint); border: 1px solid var(--border); }
+.field label .ic { width: 15px; height: 15px; vertical-align: -2px; margin-right: 4px; color: var(--faint); }
+
 /* ── Inputs / forms ────────────────────────────────────────────────────── */
 .input, .field input, .field select, .field textarea {
   width: 100%; height: 38px; padding: 0 12px; font: inherit; font-size: 14px;
@@ -362,7 +373,12 @@ select, .select {
 .deploy-head .dh-d { font-size: 12.5px; color: var(--faint); margin-top: 1px; }
 
 /* ── Map (Leaflet) ─────────────────────────────────────────────────────── */
-#map { height: 340px; border-radius: var(--radius); overflow: hidden; z-index: 0; }
+#map { height: 340px; border-radius: var(--radius); overflow: hidden; z-index: 0; border: 1px solid var(--border); }
+/* Flat map chrome: quiet the Leaflet zoom + attribution controls so the basemap stays clean. */
+.leaflet-control-zoom a { background: var(--glass); color: var(--dim); border-color: var(--border); }
+.leaflet-control-zoom a:hover { background: var(--glass-2); color: var(--text); }
+.leaflet-control-attribution { background: var(--bar-bg); color: var(--faint); font-size: 10px; }
+.leaflet-control-attribution a { color: var(--dim); }
 .leaflet-container { font-family: inherit; background: var(--glass-2); }
 
 /* ── Photo thumbnails + lightbox ───────────────────────────────────────── */

@@ -38,19 +38,22 @@ function attachHandlers(bot) {
     return workers.find(w => String(w.telegramId) === String(telegramId) && w.active) || null;
   }
 
-  // Point ids this worker already checked in at today (to mark them ✅ in /route).
-  // Attributed by the stable workerId (telegramId as fallback for older visits), and
-  // "today" follows the company timezone.
-  async function visitedTodayIds(worker) {
+  // This worker's check-in history in one pass: which stops are done TODAY (to mark them
+  // ✅) and how many times each stop has been visited all-time (to surface the most-used
+  // stops first). Attributed by the stable workerId (telegramId as fallback for older
+  // visits); "today" follows the company timezone.
+  async function workerVisitStats(worker) {
     const today = localDateStr(null, config.TIMEZONE);
     const visits = await source().listVisits({ limit: 2000 });
-    const set = new Set();
+    const visitedToday = new Set();
+    const usage = {}; // pointId → all-time count for this worker
     for (const v of visits) {
-      if (visitBelongsToWorker(v, worker) && localDateStr(v.timestamp, config.TIMEZONE) === today) {
-        set.add(String(v.pointId));
-      }
+      if (!visitBelongsToWorker(v, worker)) continue;
+      const pid = String(v.pointId);
+      usage[pid] = (usage[pid] || 0) + 1;
+      if (localDateStr(v.timestamp, config.TIMEZONE) === today) visitedToday.add(pid);
     }
-    return set;
+    return { visitedToday, usage };
   }
 
   // Prompt an unregistered user to share their phone so we can link them by phone
@@ -81,7 +84,9 @@ function attachHandlers(bot) {
   });
 
   // How many stop buttons to show at once before asking the worker to search instead.
-  const ROUTE_PAGE = 12;
+  // Kept small on purpose: the worker sees their most-used stops first, and searches for
+  // the rest.
+  const ROUTE_PAGE = 5;
   function pointMatches(p, q) {
     if (!q) return true;
     const hay = (String(p.name || "") + " " + String(p.address || "") + " " + String(p.id || "")).toLowerCase();
@@ -95,16 +100,20 @@ function attachHandlers(bot) {
     const worker = await findWorker(userId);
     if (!worker) return askForContact(chatId);
 
-    const points = (await source().listPointsForWorker(worker.workerId)).filter(p => p.active);
+    let points = (await source().listPointsForWorker(worker.workerId)).filter(p => p.active);
     if (!points.length) return bot.sendMessage(chatId, "Todavía no tienes paradas asignadas. Pídele a tu responsable que te las asigne.");
 
-    const visited = await visitedTodayIds(worker);
-    // routeMap stays the FULL list so ci:i callbacks keep pointing at the right stop.
+    const { visitedToday: visited, usage } = await workerVisitStats(worker);
+    // Most-used stops first so the 5 shown by default are the ones this worker visits most
+    // (stable order for ties). Search still spans the whole list.
+    points = points.slice().sort((a, b) => (usage[String(b.id)] || 0) - (usage[String(a.id)] || 0));
+
+    // routeMap stays the FULL (sorted) list so ci:i callbacks keep pointing at the right stop.
     setState(userId, { step: "route", worker, routeMap: points });
     const doneCount = points.filter(p => visited.has(String(p.id))).length;
 
     const q = String(query || "").trim();
-    // Keep each point's original index in routeMap so filtered buttons still resolve.
+    // Keep each point's index in routeMap so filtered buttons still resolve.
     const matches = points.map((p, i) => ({ p, i })).filter(x => pointMatches(x.p, q));
     const shown = matches.slice(0, ROUTE_PAGE);
 
@@ -121,7 +130,7 @@ function attachHandlers(bot) {
         : `🔎 Nada coincide con "${esc(q)}".\nPulsa *🔍 Buscar parada* para probar otra vez.`;
     } else {
       const more = points.length > ROUTE_PAGE
-        ? `\nTienes *${points.length}* paradas — pulsa *🔍 Buscar parada* para encontrar una por nombre.`
+        ? `\nTienes *${points.length}* paradas — muestro tus *${ROUTE_PAGE} más usadas*. Pulsa *🔍 Buscar parada* para encontrar cualquier otra por nombre.`
         : "";
       header = `🗺 *Tus paradas* — ${doneCount}/${points.length} hechas hoy.${more}\nPulsa una para hacer check-in (✅ = ya hecha hoy):`;
     }
@@ -217,24 +226,18 @@ function attachHandlers(bot) {
 
       const worker = await source().findWorkerByPhone(msg.contact.phone_number);
       if (worker) {
-        // Known worker → just link this Telegram account to their profile.
+        // Known worker → link this Telegram account to their profile.
         await source().linkWorkerTelegram(worker.row, userId);
         return bot.sendMessage(msg.chat.id,
           `✅ ¡Registrado como *${esc(worker.name || "trabajador")}*!\n\nPulsa /route para ver tus paradas y empezar a hacer check-in.`,
           { parse_mode: "Markdown", reply_markup: removeKb });
       }
 
-      // Unknown number → auto-create a new worker (self-onboarding).
-      const displayName = [msg.from.first_name, msg.from.last_name].filter(Boolean).join(" ").trim()
-        || (msg.from.username ? "@" + msg.from.username : "Nuevo trabajador");
-      await source().addWorker({
-        name: displayName,
-        phone: msg.contact.phone_number,
-        telegramId: String(userId),
-        active: true,
-      });
+      // Unknown number → NOT allowed in. Only workers whose phone the manager has
+      // preloaded can register; there is no self-onboarding. This keeps the roster under
+      // the company's control (no strangers linking themselves to the bot).
       bot.sendMessage(msg.chat.id,
-        `✅ ¡Bienvenido, *${esc(displayName)}*! Ya estás registrado.\n\nTu responsable te asignará las paradas — después pulsa /route para empezar a hacer check-in.`,
+        "⚠️ Tu número no está en el sistema.\n\nPide a tu responsable que te dé de alta con *este mismo teléfono* y luego vuelve a pulsar /start.",
         { parse_mode: "Markdown", reply_markup: removeKb });
     } catch (e) {
       console.error("contact/register error:", e.message);
