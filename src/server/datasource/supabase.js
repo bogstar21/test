@@ -255,6 +255,7 @@ function makeSupabaseSource(tenant) {
     return (data || []).map(r => ({
       timestamp: str(r.timestamp),
       visitId: str(r.visit_id),
+      workerId: str(r.worker_id),
       workerTelegramId: str(r.worker_telegram_id),
       workerName: str(r.worker_name),
       pointId: str(r.point_id),
@@ -274,6 +275,7 @@ function makeSupabaseSource(tenant) {
       tenant_id: tenantId,
       timestamp: v.timestamp || new Date().toISOString(),
       visit_id: visitId,
+      worker_id: str(v.workerId),
       worker_telegram_id: str(v.workerTelegramId),
       worker_name: str(v.workerName),
       point_id: str(v.pointId),

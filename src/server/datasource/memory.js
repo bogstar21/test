@@ -40,8 +40,8 @@ function seed() {
       { row: 4, id: "P3", name: "Novus Lukyanivka",    address: "Sichovykh Striltsiv St 103, Kyiv", workerId: "W1", workerName: "Ivan Petrenko", lat: "", lng: "", geolocated: false, active: true },
     ],
     visits: [
-      { timestamp: new Date(Date.now() - 3600e3).toISOString(), visitId: "V1", workerTelegramId: "100000001", workerName: "Ivan Petrenko", pointId: "P1", pointName: "Silpo Khreshchatyk", lat: "50.4471", lng: "30.5219", mapsLink: "https://www.google.com/maps?q=50.4471,30.5219", photoCount: 2, photoFileIds: "", source: "bot", note: "" },
-      { timestamp: new Date(Date.now() - 1800e3).toISOString(), visitId: "V2", workerTelegramId: "100000002", workerName: "Olena Kovalenko", pointId: "P2", pointName: "ATB Podil", lat: "50.4655", lng: "30.5145", mapsLink: "https://www.google.com/maps?q=50.4655,30.5145", photoCount: 1, photoFileIds: "", source: "bot", note: "" },
+      { timestamp: new Date(Date.now() - 3600e3).toISOString(), visitId: "V1", workerId: "W1", workerTelegramId: "100000001", workerName: "Ivan Petrenko", pointId: "P1", pointName: "Silpo Khreshchatyk", lat: "50.4471", lng: "30.5219", mapsLink: "https://www.google.com/maps?q=50.4471,30.5219", photoCount: 2, photoFileIds: "", source: "bot", note: "" },
+      { timestamp: new Date(Date.now() - 1800e3).toISOString(), visitId: "V2", workerId: "W2", workerTelegramId: "100000002", workerName: "Olena Kovalenko", pointId: "P2", pointName: "ATB Podil", lat: "50.4655", lng: "30.5145", mapsLink: "https://www.google.com/maps?q=50.4655,30.5145", photoCount: 1, photoFileIds: "", source: "bot", note: "" },
     ],
   };
 }
@@ -235,6 +235,7 @@ function makeMemorySource(tenantId) {
     db.visits.push({
       timestamp: v.timestamp || new Date().toISOString(),
       visitId,
+      workerId: str(v.workerId),
       workerTelegramId: str(v.workerTelegramId),
       workerName: str(v.workerName),
       pointId: str(v.pointId),

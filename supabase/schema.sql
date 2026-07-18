@@ -61,6 +61,7 @@ create table if not exists public.starx_visits (
   tenant_id           text default 'default',
   timestamp           timestamptz default now(),
   visit_id            text default '',
+  worker_id           text default '',   -- stable worker id (attribution key; see worker_telegram_id fallback)
   worker_telegram_id  text default '',
   worker_name         text default '',
   point_id            text default '',
@@ -75,6 +76,7 @@ create table if not exists public.starx_visits (
 );
 alter table public.starx_visits add column if not exists tenant_id text default 'default';
 alter table public.starx_visits add column if not exists source    text default 'bot';
+alter table public.starx_visits add column if not exists worker_id text default '';
 
 -- ── Settings (key/value per tenant) ──────────────────────────────────────────────
 -- Small flags the platform toggles at runtime, e.g. pwa_enabled = "true".
@@ -89,6 +91,7 @@ create table if not exists public.starx_settings (
 -- ── Indexes ──────────────────────────────────────────────────────────────────────
 create index if not exists idx_starx_visits_timestamp on public.starx_visits (timestamp desc);
 create index if not exists idx_starx_visits_tenant     on public.starx_visits (tenant_id);
+create index if not exists idx_starx_visits_worker     on public.starx_visits (worker_id);
 create index if not exists idx_starx_workers_telegram  on public.starx_workers (telegram_id);
 create index if not exists idx_starx_workers_phone     on public.starx_workers (phone);
 create index if not exists idx_starx_workers_tenant    on public.starx_workers (tenant_id);

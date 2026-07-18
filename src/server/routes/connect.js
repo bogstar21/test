@@ -53,7 +53,7 @@ function shapeVisit(v, base) {
   return {
     visitId:   v.visitId,
     timestamp: v.timestamp,
-    worker:    { telegramId: v.workerTelegramId, name: v.workerName },
+    worker:    { workerId: v.workerId, telegramId: v.workerTelegramId, name: v.workerName },
     point:     { id: v.pointId, name: v.pointName },
     location:  { lat: v.lat, lng: v.lng, mapsLink: v.mapsLink },
     photoCount: count,

@@ -6,6 +6,7 @@ const express = require("express");
 const config  = require("../config");
 const { requireAuth } = require("../auth");
 const { forTenant } = require("../datasource");
+const { localDateStr, visitBelongsToWorker, geofenceOk } = require("../util");
 
 const bigJson = express.json({ limit: "12mb" }); // base64 photo payloads
 function str(v) { return v == null ? "" : String(v); }
@@ -30,11 +31,11 @@ function mountCheckinRoutes(app) {
       const worker = await sessionWorker(source, req.user || {});
       if (!worker) return res.json({ points: [] });
       const points = (await source.listPointsForWorker(worker.workerId)).filter(p => p.active);
-      const today = new Date().toISOString().slice(0, 10);
+      const today = localDateStr(null, config.TIMEZONE);
       const visits = await source.listVisits({ limit: 2000 });
       const doneToday = new Set(
-        visits.filter(v => String(v.workerTelegramId) === String(worker.telegramId)
-                        && String(v.timestamp || "").slice(0, 10) === today)
+        visits.filter(v => visitBelongsToWorker(v, worker)
+                        && localDateStr(v.timestamp, config.TIMEZONE) === today)
               .map(v => String(v.pointId)));
       res.json({
         points: points.map(p => ({
@@ -68,6 +69,17 @@ function mountCheckinRoutes(app) {
         return res.status(403).json({ error: "not_your_point", detail: "This stop is assigned to another worker." });
       }
 
+      // Geofence: reject a check-in too far from the point's known location (off by default;
+      // set GEOFENCE_METERS). The first check-in at a point has no coords yet → always allowed.
+      const fence = geofenceOk(point, lat, lng, config.GEOFENCE_METERS);
+      if (!fence.ok) {
+        return res.status(422).json({
+          error: "too_far",
+          detail: `Estás a ${fence.distance} m del punto (máximo ${config.GEOFENCE_METERS} m). Acércate para hacer el check-in.`,
+          distance: fence.distance, maxMeters: config.GEOFENCE_METERS,
+        });
+      }
+
       // Optional photo → datasource photo store (Supabase Storage / in-memory).
       const photoFileIds = [];
       if (b.photo) {
@@ -78,8 +90,9 @@ function mountCheckinRoutes(app) {
 
       const visitId = await source.addVisit({
         timestamp: new Date().toISOString(),
+        workerId: worker ? worker.workerId : "",
         workerTelegramId: str(req.user.telegramId),
-        workerName: req.user.name || "",
+        workerName: (worker && worker.name) || req.user.name || "",
         pointId, pointName: point.name || point.address || point.id,
         lat, lng, mapsLink: `https://www.google.com/maps?q=${lat},${lng}`,
         photoCount: photoFileIds.length,

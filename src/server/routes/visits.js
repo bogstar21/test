@@ -5,6 +5,7 @@ const express = require("express");
 const config  = require("../config");
 const { requireAuth } = require("../auth");
 const { forTenant } = require("../datasource");
+const { localDateStr } = require("../util");
 
 function ds(req) { return forTenant(config.getTenant(req)); }
 function fail(res, e) { console.error("/api/visits error:", e && e.message); res.status(500).json({ error: (e && e.message) || "server_error" }); }
@@ -70,11 +71,11 @@ function mountVisitRoutes(app) {
       const [points, workers, visits] = await Promise.all([
         source.listPoints(), source.listWorkers(), source.listVisits({ limit: 5000 }),
       ]);
-      const today = new Date().toISOString().slice(0, 10);
+      const today = localDateStr(null, config.TIMEZONE);
       const byWorker = {}, byPoint = {};
       let todayCount = 0;
       for (const v of visits) {
-        if ((v.timestamp || "").slice(0, 10) === today) todayCount++;
+        if (localDateStr(v.timestamp, config.TIMEZONE) === today) todayCount++;
         tally(byWorker, v.workerName || v.workerTelegramId);
         tally(byPoint, v.pointName || v.pointId);
       }
@@ -83,15 +84,24 @@ function mountVisitRoutes(app) {
       // many were checked in today (X of Y), and which remain pending.
       const activePoints = points.filter(p => p.active);
       const pointsUnassigned = activePoints.filter(p => !p.workerId).length;
-      const doneTodayByWorker = {}; // telegramId → Set(pointId)
+
+      // Resolve a visit to its owner's stable workerId. New visits carry workerId; older
+      // ones only a telegramId, so map telegramId → workerId as a fallback.
+      const tidToWid = {};
+      for (const w of workers) if (w.telegramId) tidToWid[String(w.telegramId)] = String(w.workerId);
+      const ownerWid = v =>
+        String(v.workerId || "").trim() || tidToWid[String(v.workerTelegramId || "")] || "";
+
+      const doneTodayByWid = {}; // workerId → Set(pointId)
       for (const v of visits) {
-        if ((v.timestamp || "").slice(0, 10) !== today) continue;
-        const tid = String(v.workerTelegramId || "");
-        (doneTodayByWorker[tid] || (doneTodayByWorker[tid] = new Set())).add(String(v.pointId));
+        if (localDateStr(v.timestamp, config.TIMEZONE) !== today) continue;
+        const wid = ownerWid(v);
+        if (!wid) continue;
+        (doneTodayByWid[wid] || (doneTodayByWid[wid] = new Set())).add(String(v.pointId));
       }
       const coverage = workers.map(w => {
         const assigned = activePoints.filter(p => String(p.workerId) === String(w.workerId));
-        const done = doneTodayByWorker[String(w.telegramId)] || new Set();
+        const done = doneTodayByWid[String(w.workerId)] || new Set();
         const pending = assigned.filter(p => !done.has(String(p.id)));
         return {
           workerId: w.workerId,

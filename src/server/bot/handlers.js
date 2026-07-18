@@ -10,6 +10,7 @@
 // and the stats on the web dashboard always read/write the same store.
 const config = require("../config");
 const { forTenant } = require("../datasource");
+const { localDateStr, visitBelongsToWorker, geofenceOk } = require("../util");
 
 // Attach every handler to a ready TelegramBot instance. Called by the bot manager
 // right after it creates the bot (see src/server/bot/manager.js).
@@ -38,12 +39,14 @@ function attachHandlers(bot) {
   }
 
   // Point ids this worker already checked in at today (to mark them ✅ in /route).
-  async function visitedTodayIds(telegramId) {
-    const today = new Date().toISOString().slice(0, 10);
+  // Attributed by the stable workerId (telegramId as fallback for older visits), and
+  // "today" follows the company timezone.
+  async function visitedTodayIds(worker) {
+    const today = localDateStr(null, config.TIMEZONE);
     const visits = await source().listVisits({ limit: 2000 });
     const set = new Set();
     for (const v of visits) {
-      if (String(v.workerTelegramId) === String(telegramId) && String(v.timestamp || "").slice(0, 10) === today) {
+      if (visitBelongsToWorker(v, worker) && localDateStr(v.timestamp, config.TIMEZONE) === today) {
         set.add(String(v.pointId));
       }
     }
@@ -95,7 +98,7 @@ function attachHandlers(bot) {
     const points = (await source().listPointsForWorker(worker.workerId)).filter(p => p.active);
     if (!points.length) return bot.sendMessage(chatId, "Todavía no tienes paradas asignadas. Pídele a tu responsable que te las asigne.");
 
-    const visited = await visitedTodayIds(userId);
+    const visited = await visitedTodayIds(worker);
     // routeMap stays the FULL list so ci:i callbacks keep pointing at the right stop.
     setState(userId, { step: "route", worker, routeMap: points });
     const doneCount = points.filter(p => visited.has(String(p.id))).length;
@@ -158,7 +161,13 @@ function attachHandlers(bot) {
       await bot.answerCallbackQuery(q.id, { text: "Pulsa /route otra vez.", show_alert: true }).catch(() => {});
       return;
     }
-    setState(userId, { step: "waiting_location", pointId: point.id, pointName: point.name || point.address || point.id, photos: [] });
+    setState(userId, {
+      step: "waiting_location",
+      pointId: point.id, pointName: point.name || point.address || point.id,
+      // Snapshot the point's known coords so we can geofence the check-in at the end.
+      pointLat: point.lat, pointLng: point.lng, pointGeolocated: point.geolocated,
+      photos: [],
+    });
     await bot.answerCallbackQuery(q.id).catch(() => {});
     bot.sendMessage(q.message.chat.id,
       `📍 Check-in en *${esc(point.name || point.address || point.id)}*.\n\n*Paso 1 de 2* — envía tu ubicación:`,
@@ -172,6 +181,17 @@ function attachHandlers(bot) {
     const st = getState(userId);
     if (st.step !== "waiting_location") return;
     const { latitude, longitude } = msg.location;
+
+    // Geofence: if the point already has coords and a radius is configured, the worker
+    // must be within it. First check-in (no coords yet) is always accepted.
+    const fence = geofenceOk(
+      { lat: st.pointLat, lng: st.pointLng, geolocated: st.pointGeolocated },
+      latitude, longitude, config.GEOFENCE_METERS);
+    if (!fence.ok) {
+      return bot.sendMessage(msg.chat.id,
+        `⚠️ Estás a *${fence.distance} m* de *${esc(st.pointName)}* (máximo ${config.GEOFENCE_METERS} m).\nAcércate al punto y vuelve a enviar tu ubicación.`,
+        { parse_mode: "Markdown", reply_markup: locationKb });
+    }
     setState(userId, {
       step: "waiting_photos",
       lat: latitude, lng: longitude,
@@ -261,6 +281,7 @@ function attachHandlers(bot) {
         const worker = st.worker || await findWorker(userId);
         const visitId = await source().addVisit({
           timestamp: new Date().toISOString(),
+          workerId: worker ? worker.workerId : "",
           workerTelegramId: String(userId),
           workerName: worker ? worker.name : "",
           pointId: st.pointId, pointName: st.pointName,

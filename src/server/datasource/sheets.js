@@ -18,7 +18,7 @@ const _settings = new Map();
 const TABS = {
   workers: { name: "workers", headers: ["telegramId", "name", "phone", "active", "workerId"] },
   points:  { name: "points",  headers: ["id", "name", "address", "lat", "lng", "active", "workerId", "workerName"] },
-  visits:  { name: "visits",  headers: ["timestamp", "visitId", "workerTelegramId", "workerName", "pointId", "pointName", "lat", "lng", "mapsLink", "photoCount", "photoFileIds", "note"] },
+  visits:  { name: "visits",  headers: ["timestamp", "visitId", "workerTelegramId", "workerName", "pointId", "pointName", "lat", "lng", "mapsLink", "photoCount", "photoFileIds", "note", "workerId"] },
 };
 
 const MAX_ROWS = 5000;
@@ -242,6 +242,7 @@ function makeSheetsSource(sheetId) {
       photoCount: parseInt(r[9], 10) || 0,
       photoFileIds: str(r[10]),
       note: str(r[11]),
+      workerId: str(r[12]),
       source: "bot",
     })).filter(v => v.timestamp || v.visitId);
     visits.sort((a, b) => (Date.parse(b.timestamp) || 0) - (Date.parse(a.timestamp) || 0)); // newest first
@@ -264,6 +265,7 @@ function makeSheetsSource(sheetId) {
       String(v.photoCount || 0),
       Array.isArray(v.photoFileIds) ? v.photoFileIds.join(",") : str(v.photoFileIds),
       str(v.note),
+      str(v.workerId),
     ];
     await appendBlock(TABS.visits.name, [row]);
     return row[1]; // visitId

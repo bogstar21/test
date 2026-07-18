@@ -10,6 +10,16 @@ const PUBLIC_DIR = path.join(ROOT_DIR, "public");
 const PORT = process.env.PORT || 3000;
 const PLATFORM_URL = process.env.PLATFORM_URL || "";
 
+// Company timezone for "today" / daily-coverage math (IANA name, e.g. "Europe/Madrid",
+// "Europe/Kyiv"). Defaults to Europe/Madrid; override with the TIMEZONE env var. Server
+// clocks run in UTC (e.g. on Railway), so this is what makes the day boundary correct.
+const TIMEZONE = process.env.TIMEZONE || "Europe/Madrid";
+
+// Geofence radius in metres for check-ins. 0 (default) = disabled. When > 0, a check-in
+// is rejected if it's farther than this from the point's known coordinates. The FIRST
+// check-in at a point (no coords yet) is always accepted — it sets the location.
+const GEOFENCE_METERS = parseInt(process.env.GEOFENCE_METERS || "0", 10) || 0;
+
 // ─── Tenants (one company = one login + one datasource) ────────────────────────
 // Each tenant has its OWN password and its OWN data. `source` selects the datasource
 // implementation (see src/server/datasource/index.js): "sheets" now; "api" later.
@@ -70,7 +80,7 @@ const PLATFORM_PASSWORD = process.env.PLATFORM_PASSWORD || "";
 const COOKIE_SECURE = process.env.COOKIE_SECURE === "true";
 
 module.exports = {
-  ROOT_DIR, PUBLIC_DIR, PORT, PLATFORM_URL,
+  ROOT_DIR, PUBLIC_DIR, PORT, PLATFORM_URL, TIMEZONE, GEOFENCE_METERS,
   getTenant, defaultTenant, TENANTS,
   SESSION_SECRET, SESSION_COOKIE, SESSION_TTL_MS, SESSION_TTL_DAYS, PLATFORM_PASSWORD,
   TRUSTED_IPS, isTrustedIp, COOKIE_SECURE,
