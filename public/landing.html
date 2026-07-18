@@ -1,0 +1,223 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>StarX — Check-ins de campo con GPS y fotos</title>
+  <meta name="description" content="StarX es la plataforma de check-in para equipos de campo: tus trabajadores fichan cada parada con GPS y foto desde Telegram o el móvil, y tú lo ves todo en vivo.">
+  <link rel="icon" href="/platform/assets/icon.svg">
+  <style>
+    :root{
+      --bg:#000; --bg2:#0a0a0a; --line:rgba(255,255,255,.10); --line2:rgba(255,255,255,.16);
+      --text:#ededed; --dim:#b4b8bf; --faint:#7c828b; --accent:#6366f1; --accent2:#8b8cf7;
+      --radius:14px;
+    }
+    *{box-sizing:border-box}
+    html{scroll-behavior:smooth}
+    body{margin:0;background:var(--bg);color:var(--text);
+      font-family:system-ui,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;line-height:1.6;-webkit-font-smoothing:antialiased}
+    a{color:inherit;text-decoration:none}
+    .wrap{max-width:1080px;margin:0 auto;padding:0 22px}
+    .btn{display:inline-flex;align-items:center;gap:8px;height:44px;padding:0 20px;border-radius:11px;
+      font-weight:600;font-size:15px;cursor:pointer;border:1px solid transparent;transition:.15s}
+    .btn.primary{background:var(--accent);color:#fff}
+    .btn.primary:hover{background:var(--accent2)}
+    .btn.ghost{background:transparent;color:var(--text);border-color:var(--line2)}
+    .btn.ghost:hover{background:rgba(255,255,255,.06)}
+    .btn.sm{height:38px;padding:0 15px;font-size:14px}
+
+    /* Nav */
+    header{position:sticky;top:0;z-index:10;background:rgba(0,0,0,.72);backdrop-filter:blur(12px);
+      border-bottom:1px solid var(--line)}
+    .nav{display:flex;align-items:center;justify-content:space-between;height:64px}
+    .brand{display:flex;align-items:center;gap:10px;font-weight:700;font-size:20px;letter-spacing:-.02em}
+    .mark{width:30px;height:30px;border-radius:9px;display:inline-flex;align-items:center;justify-content:center;
+      background:linear-gradient(135deg,var(--accent),#4f46e5);color:#fff}
+    .mark svg{width:18px;height:18px}
+    .nav-cta{display:flex;align-items:center;gap:10px}
+    .nav-links{display:flex;gap:26px;font-size:14px;color:var(--dim)}
+    .nav-links a:hover{color:var(--text)}
+    @media(max-width:760px){.nav-links{display:none}}
+
+    /* Hero */
+    .hero{text-align:center;padding:88px 0 64px;position:relative;overflow:hidden}
+    .hero::before{content:"";position:absolute;top:-160px;left:50%;transform:translateX(-50%);
+      width:760px;height:420px;background:radial-gradient(circle,rgba(99,102,241,.22),transparent 65%);
+      filter:blur(20px);pointer-events:none}
+    .pill{display:inline-flex;align-items:center;gap:8px;padding:6px 13px;border:1px solid var(--line2);
+      border-radius:999px;font-size:12.5px;color:var(--dim);margin-bottom:22px}
+    .pill .dot{width:7px;height:7px;border-radius:50%;background:#22c55e;box-shadow:0 0 8px #22c55e}
+    h1{font-size:clamp(34px,6vw,58px);line-height:1.05;letter-spacing:-.035em;margin:0 0 18px;font-weight:800}
+    h1 .grad{background:linear-gradient(120deg,#a5a6f8,#6366f1);-webkit-background-clip:text;background-clip:text;color:transparent}
+    .lead{font-size:clamp(16px,2.2vw,20px);color:var(--dim);max-width:640px;margin:0 auto 30px}
+    .hero-cta{display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
+    .hero-note{margin-top:16px;font-size:13px;color:var(--faint)}
+
+    section{padding:64px 0;border-top:1px solid var(--line)}
+    .sec-h{text-align:center;max-width:620px;margin:0 auto 44px}
+    .sec-h h2{font-size:clamp(26px,4vw,36px);letter-spacing:-.03em;margin:0 0 12px;font-weight:750}
+    .sec-h p{color:var(--dim);margin:0;font-size:16px}
+    .eyebrow{font-size:12px;text-transform:uppercase;letter-spacing:.12em;color:var(--accent2);font-weight:700;margin-bottom:10px}
+
+    /* Steps */
+    .steps{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
+    .step{background:var(--bg2);border:1px solid var(--line);border-radius:var(--radius);padding:26px}
+    .step .n{width:34px;height:34px;border-radius:9px;background:rgba(99,102,241,.14);color:var(--accent2);
+      display:flex;align-items:center;justify-content:center;font-weight:700;margin-bottom:14px}
+    .step h3{margin:0 0 6px;font-size:17px}
+    .step p{margin:0;color:var(--dim);font-size:14.5px}
+
+    /* Features */
+    .feat{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
+    .card{background:var(--bg2);border:1px solid var(--line);border-radius:var(--radius);padding:24px}
+    .card .ico{font-size:22px;margin-bottom:12px;display:block}
+    .card h3{margin:0 0 7px;font-size:16px}
+    .card p{margin:0;color:var(--dim);font-size:14px}
+    @media(max-width:760px){.steps,.feat{grid-template-columns:1fr}}
+
+    /* Pricing */
+    .prices{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;align-items:stretch}
+    .price{background:var(--bg2);border:1px solid var(--line);border-radius:16px;padding:28px;display:flex;flex-direction:column}
+    .price.hot{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent),0 12px 40px -12px rgba(99,102,241,.5)}
+    .price .tier{font-size:14px;font-weight:700;color:var(--accent2);text-transform:uppercase;letter-spacing:.06em}
+    .price .amt{font-size:40px;font-weight:800;letter-spacing:-.03em;margin:10px 0 2px}
+    .price .amt span{font-size:15px;font-weight:500;color:var(--faint)}
+    .price .who{color:var(--dim);font-size:14px;margin:0 0 18px}
+    .price ul{list-style:none;margin:0 0 22px;padding:0;flex:1}
+    .price li{padding:7px 0;color:var(--dim);font-size:14.5px;display:flex;gap:9px}
+    .price li::before{content:"✓";color:#22c55e;font-weight:700}
+    .tag-hot{display:inline-block;margin-left:8px;padding:2px 9px;border-radius:999px;background:var(--accent);
+      color:#fff;font-size:11px;font-weight:700;vertical-align:middle}
+    @media(max-width:760px){.prices{grid-template-columns:1fr}}
+
+    /* Final CTA */
+    .final{text-align:center}
+    .final .box{background:linear-gradient(135deg,rgba(99,102,241,.14),rgba(99,102,241,.03));
+      border:1px solid var(--line2);border-radius:20px;padding:56px 28px}
+    .final h2{font-size:clamp(26px,4vw,38px);letter-spacing:-.03em;margin:0 0 12px}
+    .final p{color:var(--dim);margin:0 0 26px;font-size:17px}
+
+    footer{border-top:1px solid var(--line);padding:34px 0;color:var(--faint);font-size:13px}
+    .foot{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px}
+  </style>
+</head>
+<body>
+  <header>
+    <div class="wrap nav">
+      <div class="brand">
+        <span class="mark"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 0c.7 6.3 5.4 11 11.7 11.7C17.4 12.4 12.7 17 12 23.3 11.3 17 6.6 12.4.3 11.7 6.6 11 11.3 6.3 12 0Z"/></svg></span>
+        StarX
+      </div>
+      <nav class="nav-links">
+        <a href="#como">Cómo funciona</a>
+        <a href="#features">Características</a>
+        <a href="#precios">Precios</a>
+      </nav>
+      <div class="nav-cta">
+        <a class="btn ghost sm" href="/platform/login">Iniciar sesión</a>
+        <a class="btn primary sm" href="/platform/login?tab=new">Empezar gratis</a>
+      </div>
+    </div>
+  </header>
+
+  <!-- HERO -->
+  <div class="hero">
+    <div class="wrap">
+      <span class="pill"><span class="dot"></span> Check-ins de campo con prueba real</span>
+      <h1>Sabe <span class="grad">quién fue a dónde</span>,<br>cuándo y con foto.</h1>
+      <p class="lead">StarX es la plataforma de check-in para equipos de campo. Tus trabajadores fichan cada parada con <b>GPS + foto</b> desde Telegram o el móvil, y tú lo ves todo en vivo: mapa, estadísticas y cobertura diaria.</p>
+      <div class="hero-cta">
+        <a class="btn primary" href="/platform/login?tab=new">Crear mi empresa gratis</a>
+        <a class="btn ghost" href="#como">Ver cómo funciona</a>
+      </div>
+      <div class="hero-note">14 días de prueba · sin tarjeta · listo en minutos</div>
+    </div>
+  </div>
+
+  <!-- CÓMO FUNCIONA -->
+  <section id="como">
+    <div class="wrap">
+      <div class="sec-h">
+        <div class="eyebrow">Cómo funciona</div>
+        <h2>De cero a check-ins en 3 pasos</h2>
+        <p>Sin instalar nada. Tus trabajadores usan el chat que ya tienen.</p>
+      </div>
+      <div class="steps">
+        <div class="step"><div class="n">1</div><h3>Carga tus paradas y tu equipo</h3><p>Sube un Excel o conéctalo por API. Asigna cada punto a un trabajador por su teléfono.</p></div>
+        <div class="step"><div class="n">2</div><h3>El trabajador ficha en el sitio</h3><p>Abre el bot de Telegram (o la app web), elige su parada y comparte ubicación + foto. Un toque.</p></div>
+        <div class="step"><div class="n">3</div><h3>Tú lo ves todo en vivo</h3><p>Panel con mapa, estadísticas por trabajador y punto, y cobertura diaria. Exporta a CSV cuando quieras.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- CARACTERÍSTICAS -->
+  <section id="features">
+    <div class="wrap">
+      <div class="sec-h">
+        <div class="eyebrow">Características</div>
+        <h2>Todo lo que necesitas, nada que sobre</h2>
+      </div>
+      <div class="feat">
+        <div class="card"><span class="ico">📍</span><h3>GPS + foto como prueba</h3><p>Cada visita queda registrada con coordenadas y fotos. Geofence opcional: rechaza check-ins lejos del punto.</p></div>
+        <div class="card"><span class="ico">🤖</span><h3>Bot de Telegram + app web</h3><p>Un bot compartido, cero instalación. O una PWA para quien prefiera el navegador. El trabajador elige.</p></div>
+        <div class="card"><span class="ico">🗺️</span><h3>Panel en vivo</h3><p>Mapa de últimos check-ins, KPIs, ranking de trabajadores y puntos más visitados, claro y oscuro.</p></div>
+        <div class="card"><span class="ico">📊</span><h3>Estadísticas por persona</h3><p>Rendimiento de la empresa y de cada trabajador por periodo, con lo que requiere atención destacado.</p></div>
+        <div class="card"><span class="ico">📥</span><h3>Importación fácil</h3><p>Sube tu Excel/CSV y mapea las columnas. O empuja tu catálogo por API con tu clave privada.</p></div>
+        <div class="card"><span class="ico">🔒</span><h3>Datos aislados por empresa</h3><p>Cada compañía ve solo lo suyo. Multi-empresa desde el primer día, con roles y suscripción.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- PRECIOS -->
+  <section id="precios">
+    <div class="wrap">
+      <div class="sec-h">
+        <div class="eyebrow">Precios</div>
+        <h2>Empieza gratis, crece cuando quieras</h2>
+        <p>14 días de prueba en cualquier plan. Cancela cuando quieras — tus datos siempre son tuyos.</p>
+      </div>
+      <div class="prices">
+        <div class="price">
+          <div class="tier">Básico</div>
+          <div class="amt">19€ <span>/ mes</span></div>
+          <p class="who">Para equipos pequeños que empiezan.</p>
+          <ul><li>Hasta 5 trabajadores</li><li>Hasta 200 puntos</li><li>Bot + app web</li><li>Panel y estadísticas</li></ul>
+          <a class="btn ghost" href="/platform/login?tab=new">Empezar</a>
+        </div>
+        <div class="price hot">
+          <div class="tier">Pro <span class="tag-hot">Popular</span></div>
+          <div class="amt">49€ <span>/ mes</span></div>
+          <p class="who">Para operaciones en crecimiento.</p>
+          <ul><li>Hasta 25 trabajadores</li><li>Hasta 2.000 puntos</li><li>Geofence y export CSV</li><li>API conector</li></ul>
+          <a class="btn primary" href="/platform/login?tab=new">Empezar prueba</a>
+        </div>
+        <div class="price">
+          <div class="tier">Business</div>
+          <div class="amt">99€ <span>/ mes</span></div>
+          <p class="who">Para flotas y multi-equipo.</p>
+          <ul><li>Trabajadores ilimitados</li><li>Puntos ilimitados</li><li>Todo lo de Pro</li><li>Soporte prioritario</li></ul>
+          <a class="btn ghost" href="/platform/login?tab=new">Hablar / empezar</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- CTA FINAL -->
+  <section class="final">
+    <div class="wrap">
+      <div class="box">
+        <h2>Pon a tu equipo a fichar hoy</h2>
+        <p>Crea tu empresa en un minuto y haz tu primer check-in real.</p>
+        <a class="btn primary" href="/platform/login?tab=new">Crear mi empresa gratis</a>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <div class="wrap foot">
+      <div class="brand" style="font-size:16px"><span class="mark" style="width:24px;height:24px"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 0c.7 6.3 5.4 11 11.7 11.7C17.4 12.4 12.7 17 12 23.3 11.3 17 6.6 12.4.3 11.7 6.6 11 11.3 6.3 12 0Z"/></svg></span> StarX</div>
+      <div>© 2026 StarX · <a href="/platform/login" style="color:var(--dim)">Iniciar sesión</a> · <a href="/platform/login?tab=new" style="color:var(--dim)">Crear empresa</a></div>
+    </div>
+  </footer>
+</body>
+</html>

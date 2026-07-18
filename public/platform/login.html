@@ -75,6 +75,8 @@
     if (p.get("e")) document.getElementById("err").style.display = "block";
     var next = p.get("next");
     if (next) document.getElementById("form").action = "/auth/login?next=" + encodeURIComponent(next);
+    // Deep-link a tab from the landing page: ?tab=new (signup) | worker | mgr (default).
+    var wantTab = p.get("tab");
 
     var tabM = document.getElementById("tab-mgr"), tabW = document.getElementById("tab-wrk"), tabN = document.getElementById("tab-new");
     var fM = document.getElementById("form"), fW = document.getElementById("wform"), fS = document.getElementById("sform");
@@ -91,6 +93,9 @@
     tabM.onclick = function () { pick("mgr"); document.getElementById("password").focus(); };
     tabW.onclick = function () { pick("wrk"); document.getElementById("phone").focus(); };
     tabN.onclick = function () { pick("new"); document.getElementById("s-company").focus(); };
+    // Honour ?tab= from the landing page CTAs.
+    if (wantTab === "new") pick("new");
+    else if (wantTab === "worker") pick("wrk");
 
     fS.addEventListener("submit", async function (e) {
       e.preventDefault();
