@@ -137,6 +137,7 @@
     else if (v === "points") loadPoints();
     else if (v === "workers") loadWorkers();
     else if (v === "visits") loadVisits();
+    else if (v === "stats") loadStats();
     else if (v === "bot") loadBot();
     else if (v === "import") { renderMapping(); loadSettings(); }
     else if (v === "checkin") loadCheckin();
@@ -626,6 +627,296 @@
   function openLightbox(src) { $("#lightbox-img").src = src; $("#lightbox").classList.remove("hidden"); }
   function closeLightbox() { $("#lightbox").classList.add("hidden"); $("#lightbox-img").src = ""; }
 
+  // ── Statistics (company + personal views) ────────────────────────────────────
+  // Everything is computed client-side from /api/visits + /api/points + /api/workers,
+  // same seam the dashboard uses — no new backend endpoints needed.
+  var statsState = { mode: "company", period: 30, worker: "" };
+
+  // Resolve a visit to its owner's stable workerId (telegramId fallback for old visits).
+  function ownerWidOf(v) {
+    var wid = String(v.workerId || "").trim();
+    if (wid) return wid;
+    var tid = String(v.workerTelegramId || "").trim();
+    if (!tid) return "";
+    var w = (state.workers || []).filter(function (x) { return String(x.telegramId) === tid; })[0];
+    return w ? String(w.workerId) : "";
+  }
+
+  // Visits inside the selected period (and worker, in personal mode), newest first.
+  function statsVisits() {
+    var cutoff = statsState.period ? (Date.now() - statsState.period * 864e5) : 0;
+    return (state.visits || []).filter(function (v) {
+      var t = Date.parse(v.timestamp);
+      if (!isFinite(t) || (cutoff && t < cutoff)) return false;
+      if (statsState.mode === "personal") {
+        if (!statsState.worker) return false;
+        if (ownerWidOf(v) !== String(statsState.worker)) return false;
+      }
+      return true;
+    });
+  }
+
+  // Generic day-bucketed line chart (like the dashboard one, but any target + range).
+  function renderLineInto(sel, list, days) {
+    var box = $(sel);
+    if (!box) return;
+    if (!days) { // "todo el histórico" → span from oldest visit, capped at 365 buckets
+      var oldest = Date.now();
+      list.forEach(function (v) { var t = Date.parse(v.timestamp); if (isFinite(t) && t < oldest) oldest = t; });
+      days = Math.min(365, Math.max(7, Math.ceil((Date.now() - oldest) / 864e5) + 1));
+    }
+    var buckets = {}, labels = [], now = new Date();
+    for (var i = days - 1; i >= 0; i--) {
+      var d = new Date(now); d.setDate(now.getDate() - i);
+      var key = d.toISOString().slice(0, 10);
+      buckets[key] = 0;
+      labels.push({ key: key, short: (d.getMonth() + 1) + "/" + d.getDate() });
+    }
+    var any = false;
+    list.forEach(function (v) {
+      var key = String(v.timestamp || "").slice(0, 10);
+      if (key in buckets) { buckets[key]++; any = true; }
+    });
+    if (!any) { box.innerHTML = '<div class="empty">Sin check-ins en este periodo</div>'; return; }
+
+    var W = 720, H = 200, padL = 28, padR = 8, padT = 12, padB = 22;
+    var vals = labels.map(function (l) { return buckets[l.key]; });
+    var maxV = Math.max.apply(null, vals.concat([1]));
+    var iw = W - padL - padR, ih = H - padT - padB;
+    var x = function (i) { return padL + (labels.length <= 1 ? 0 : (i / (labels.length - 1)) * iw); };
+    var y = function (val) { return padT + ih - (val / maxV) * ih; };
+    var grid = "", ticks = 4;
+    for (var g = 0; g <= ticks; g++) {
+      var gy = padT + (g / ticks) * ih;
+      grid += '<line class="grid-line" x1="' + padL + '" y1="' + gy + '" x2="' + (W - padR) + '" y2="' + gy + '"/>';
+    }
+    var linePts = vals.map(function (val, i) { return x(i) + "," + y(val); }).join(" ");
+    var areaPts = padL + "," + (padT + ih) + " " + linePts + " " + (W - padR) + "," + (padT + ih);
+    var step = Math.max(1, Math.round(labels.length / 8));
+    var dots = labels.length <= 60
+      ? vals.map(function (val, i) { return '<circle cx="' + x(i) + '" cy="' + y(val) + '" r="3" fill="#6366f1"/>'; }).join("")
+      : "";
+    var xlabels = labels.map(function (l, i) {
+      if (i % step !== 0 && i !== labels.length - 1) return "";
+      return '<text class="axis-lbl" x="' + x(i) + '" y="' + (H - 6) + '" text-anchor="middle">' + esc(l.short) + "</text>";
+    }).join("");
+    var ylabels = "";
+    for (var t = 0; t <= ticks; t++) {
+      ylabels += '<text class="axis-lbl" x="' + (padL - 6) + '" y="' + (padT + (t / ticks) * ih + 3) + '" text-anchor="end">' + Math.round((maxV / ticks) * (ticks - t)) + "</text>";
+    }
+    box.innerHTML =
+      '<svg viewBox="0 0 ' + W + " " + H + '" preserveAspectRatio="none" role="img">' +
+      '<defs><linearGradient id="sarea" x1="0" y1="0" x2="0" y2="1">' +
+      '<stop offset="0%" stop-color="#6366f1" stop-opacity="0.28"/>' +
+      '<stop offset="100%" stop-color="#6366f1" stop-opacity="0"/></linearGradient></defs>' +
+      grid + ylabels +
+      '<polygon points="' + areaPts + '" fill="url(#sarea)"/>' +
+      '<polyline points="' + linePts + '" fill="none" stroke="#6366f1" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>' +
+      dots + xlabels + "</svg>";
+  }
+
+  // 24 columns: check-ins by hour of the day (uses the same look as the weekday bars).
+  function renderHoursInto(sel, list) {
+    var box = $(sel);
+    if (!box) return;
+    var counts = []; for (var i = 0; i < 24; i++) counts.push(0);
+    list.forEach(function (v) {
+      var d = new Date(v.timestamp);
+      if (!isNaN(d.getTime())) counts[d.getHours()]++;
+    });
+    var total = counts.reduce(function (a, b) { return a + b; }, 0);
+    if (!total) { box.innerHTML = '<div class="empty">Sin check-ins en este periodo</div>'; return; }
+    var max = Math.max.apply(null, counts.concat([1]));
+    box.innerHTML = '<div class="wd-bars hours">' + counts.map(function (c, h) {
+      var hgt = Math.max(3, Math.round((c / max) * 100));
+      return '<div class="wd-col"><span class="wd-val">' + (c || "") + '</span>' +
+        '<span class="wd-bar" style="height:' + hgt + '%"></span>' +
+        '<span class="wd-lbl">' + (h % 3 === 0 ? h : "") + '</span></div>';
+    }).join("") + '</div>';
+  }
+
+  function renderWeekdayInto(sel, list) {
+    var box = $(sel);
+    if (!box) return;
+    var labels = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
+    var counts = [0, 0, 0, 0, 0, 0, 0];
+    list.forEach(function (v) {
+      var d = new Date(v.timestamp);
+      if (!isNaN(d.getTime())) counts[(d.getDay() + 6) % 7]++;
+    });
+    var total = counts.reduce(function (a, b) { return a + b; }, 0);
+    if (!total) { box.innerHTML = '<div class="empty">Sin check-ins en este periodo</div>'; return; }
+    var max = Math.max.apply(null, counts.concat([1]));
+    box.innerHTML = '<div class="wd-bars">' + counts.map(function (c, i) {
+      var h = Math.max(3, Math.round((c / max) * 100));
+      return '<div class="wd-col"><span class="wd-val">' + (c || "") + '</span>' +
+        '<span class="wd-bar" style="height:' + h + '%"></span>' +
+        '<span class="wd-lbl">' + labels[i] + '</span></div>';
+    }).join("") + '</div>';
+  }
+
+  // Leaderboard with medals for the top three (holodBot-style "Рейтинг за активністю").
+  function renderRanking(sel, obj) {
+    var el = $(sel);
+    if (!el) return;
+    var entries = Object.keys(obj).map(function (k) { return [k, obj[k]]; })
+      .sort(function (a, b) { return b[1] - a[1]; }).slice(0, 10);
+    if (!entries.length) { el.innerHTML = '<div class="empty">Sin check-ins en este periodo</div>'; return; }
+    var medals = ["🥇", "🥈", "🥉"];
+    var max = entries[0][1] || 1;
+    el.innerHTML = entries.map(function (e, i) {
+      var pct = Math.max(4, Math.round((e[1] / max) * 100));
+      return '<div class="bl-row"><span class="bl-name">' + (medals[i] || "&nbsp;&nbsp;") + " " + esc(e[0]) + '</span>' +
+        '<span class="bl-track"><span class="bl-fill" style="width:' + pct + '%"></span></span>' +
+        '<span class="bl-val">' + e[1] + "</span></div>";
+    }).join("");
+  }
+
+  function setKpiLabels(l1, s1, l2, s2, l3, s3, l4, s4) {
+    $("#sk1-lbl").textContent = l1; $("#sk1-sub").textContent = s1;
+    $("#sk2-lbl").textContent = l2; $("#sk2-sub").textContent = s2;
+    $("#sk3-lbl").textContent = l3; $("#sk3-sub").textContent = s3;
+    $("#sk4-lbl").textContent = l4; $("#sk4-sub").textContent = s4;
+  }
+
+  function renderStats() {
+    var list = statsVisits();
+    var personal = statsState.mode === "personal";
+    $("#stats-company").classList.toggle("hidden", personal);
+    $("#stats-personal").classList.toggle("hidden", !personal);
+    $("#stats-worker").classList.toggle("hidden", !personal);
+
+    // Shared computations.
+    var activeDays = {};
+    list.forEach(function (v) { var d = String(v.timestamp || "").slice(0, 10); if (d) activeDays[d] = 1; });
+    var nDays = Object.keys(activeDays).length;
+    var perDay = nDays ? (list.length / nDays) : 0;
+    var activePoints = (state.points || []).filter(function (p) { return p.active; });
+    var visitedIds = {};
+    list.forEach(function (v) { if (v.pointId) visitedIds[String(v.pointId)] = (visitedIds[String(v.pointId)] || 0) + 1; });
+
+    $("#sk1").textContent = list.length;
+    $("#sk2").textContent = nDays;
+    $("#sk3").textContent = nDays ? perDay.toFixed(1) : "–";
+
+    $("#stats-line-title").textContent = personal
+      ? "Actividad de " + (workerNameById(statsState.worker) || "…")
+      : "Actividad de la empresa";
+    renderLineInto("#stats-line", list, statsState.period);
+
+    if (!personal) {
+      // Company KPIs: points covered = active points visited ≥1 time in the period.
+      var covered = activePoints.filter(function (p) { return visitedIds[String(p.id)]; }).length;
+      setKpiLabels("Check-ins", "en el periodo", "Días activos", "con al menos 1 check-in",
+        "Media por día activo", "check-ins", "Puntos cubiertos", "de " + activePoints.length + " activos");
+      $("#sk4").textContent = covered;
+
+      var byWorker = {}, byPoint = {};
+      list.forEach(function (v) {
+        var w = v.workerName || v.workerTelegramId; if (w) byWorker[w] = (byWorker[w] || 0) + 1;
+        var p = v.pointName || v.pointId; if (p) byPoint[p] = (byPoint[p] || 0) + 1;
+      });
+      renderRanking("#stats-ranking", byWorker);
+      renderBarlist("#stats-toppoints", byPoint);
+      renderHoursInto("#stats-hours", list);
+      renderWeekdayInto("#stats-weekday", list);
+      renderAttention(list, visitedIds, activePoints);
+    } else {
+      renderPersonal(list, visitedIds);
+    }
+  }
+
+  function workerNameById(wid) {
+    var w = (state.workers || []).filter(function (x) { return String(x.workerId) === String(wid); })[0];
+    return w ? (w.name || w.phone || w.workerId) : "";
+  }
+
+  // "Requiere atención" (holodBot's "Потребує уваги"): what the manager should fix.
+  function renderAttention(list, visitedIds, activePoints) {
+    var box = $("#stats-attn");
+    if (!box) return;
+    var activeWids = {};
+    list.forEach(function (v) { var wid = ownerWidOf(v); if (wid) activeWids[wid] = 1; });
+    var silentWorkers = (state.workers || []).filter(function (w) { return w.active && !activeWids[String(w.workerId)]; });
+    var unvisited = activePoints.filter(function (p) { return !visitedIds[String(p.id)]; });
+    var noGeo = activePoints.filter(function (p) { return !p.geolocated; });
+    var unassigned = activePoints.filter(function (p) { return !p.workerId; });
+    function names(arr, key) { return arr.slice(0, 4).map(function (i) { return esc(i[key] || i.id || ""); }).join(", ") + (arr.length > 4 ? "…" : ""); }
+    function card(color, num, label, hint) {
+      return '<div class="card attn ' + color + '"><div class="attn-num">' + num + '</div><div class="attn-lbl">' + label + '</div>' +
+        (num ? '<div class="attn-hint">' + hint + '</div>' : '<div class="attn-hint ok">✓ todo en orden</div>') + '</div>';
+    }
+    box.innerHTML =
+      card("rose",   unvisited.length,    "puntos sin visitar en el periodo", names(unvisited, "name")) +
+      card("amber",  silentWorkers.length, "trabajadores sin actividad",       names(silentWorkers, "name")) +
+      card("indigo", noGeo.length,        "puntos sin geolocalizar",          names(noGeo, "name")) +
+      card("slate",  unassigned.length,   "puntos sin asignar",               names(unassigned, "name"));
+  }
+
+  // Personal view: coverage of assigned points, their top points, recent check-ins table.
+  function renderPersonal(list, visitedIds) {
+    var wid = statsState.worker;
+    if (!wid) {
+      setKpiLabels("Check-ins", "elige un trabajador", "Días activos", "—", "Media por día activo", "—", "Puntos distintos", "—");
+      $("#sk1").textContent = "–"; $("#sk2").textContent = "–"; $("#sk3").textContent = "–"; $("#sk4").textContent = "–";
+      $("#stats-p-coverage").innerHTML = '<div class="empty">Elige un trabajador arriba.</div>';
+      $("#stats-p-points").innerHTML = '<div class="empty">Elige un trabajador arriba.</div>';
+      $("#stats-p-table").innerHTML = '<div class="empty">Elige un trabajador arriba.</div>';
+      return;
+    }
+    var distinct = Object.keys(visitedIds).length;
+    setKpiLabels("Check-ins", "en el periodo", "Días activos", "con al menos 1 check-in",
+      "Media por día activo", "check-ins", "Puntos distintos", "paradas diferentes visitadas");
+    $("#sk4").textContent = distinct;
+
+    // Assigned-point coverage: every assigned point with its visit count in the period.
+    var assigned = (state.points || []).filter(function (p) { return p.active && String(p.workerId) === String(wid); });
+    var cov = $("#stats-p-coverage");
+    if (!assigned.length) cov.innerHTML = '<div class="empty">No tiene puntos asignados.</div>';
+    else {
+      var max = Math.max.apply(null, assigned.map(function (p) { return visitedIds[String(p.id)] || 0; }).concat([1]));
+      cov.innerHTML = assigned.map(function (p) {
+        var n = visitedIds[String(p.id)] || 0;
+        var pct = Math.max(4, Math.round((n / max) * 100));
+        return '<div class="bl-row"><span class="bl-name">' + (n ? "✅" : "⚠️") + " " + esc(p.name || p.address || p.id) + '</span>' +
+          '<span class="bl-track"><span class="bl-fill" style="width:' + (n ? pct : 0) + '%"></span></span>' +
+          '<span class="bl-val">' + n + "</span></div>";
+      }).join("");
+    }
+
+    var byPoint = {};
+    list.forEach(function (v) { var p = v.pointName || v.pointId; if (p) byPoint[p] = (byPoint[p] || 0) + 1; });
+    renderBarlist("#stats-p-points", byPoint);
+
+    var rows = list.slice(0, 15);
+    $("#stats-p-table").innerHTML = !rows.length
+      ? '<div class="card card-pad"><div class="empty">Sin check-ins en este periodo.</div></div>'
+      : tableWrap(["Hora", "Punto", "Fuente", "Fotos", "Nota"], rows.map(function (v) {
+          return '<tr><td data-label="Hora">' + fmtTime(v.timestamp) + '</td><td data-label="Punto">' + esc(v.pointName || v.pointId) +
+            '</td><td data-label="Fuente">' + (v.source === "pwa" ? "App" : "Bot") +
+            '</td><td data-label="Fotos">' + (v.photoCount || 0) + '</td><td data-label="Nota" class="muted">' + esc(v.note || "") + "</td></tr>";
+        }).join(""), true);
+  }
+
+  function fillStatsWorkers() {
+    var sel = $("#stats-worker");
+    if (!sel) return;
+    sel.innerHTML = '<option value="">Elige un trabajador…</option>' + (state.workers || [])
+      .filter(function (w) { return w.active; })
+      .map(function (w) { return '<option value="' + esc(w.workerId) + '"' + (String(statsState.worker) === String(w.workerId) ? " selected" : "") + '>' + esc(w.name || w.phone || w.workerId) + "</option>"; }).join("");
+  }
+
+  async function loadStats() {
+    try {
+      var out = await Promise.all([api("/api/visits?limit=5000"), api("/api/points"), api("/api/workers")]);
+      state.visits = out[0].visits || [];
+      state.points = out[1].points || [];
+      state.workers = out[2].workers || [];
+      fillStatsWorkers();
+      renderStats();
+    } catch (e) { toast(e.message, true); }
+  }
+
   // ── Bot ──────────────────────────────────────────────────────────────────────
   function setBadge(on) {
     var b = $("#bot-badge");
@@ -947,6 +1238,20 @@
       if (vFrom) vFrom.value = ""; if (vTo) vTo.value = "";
       renderVisits();
     };
+
+    // Statistics
+    var sReload = $("#stats-reload"); if (sReload) sReload.onclick = loadStats;
+    var sPeriod = $("#stats-period");
+    if (sPeriod) sPeriod.onchange = function () { statsState.period = parseInt(this.value, 10) || 0; renderStats(); };
+    var sWorker = $("#stats-worker");
+    if (sWorker) sWorker.onchange = function () { statsState.worker = this.value; renderStats(); };
+    $$("#stats-mode .seg-btn").forEach(function (b) {
+      b.onclick = function () {
+        statsState.mode = b.dataset.mode;
+        $$("#stats-mode .seg-btn").forEach(function (x) { x.classList.toggle("active", x === b); });
+        renderStats();
+      };
+    });
 
     // Bot
     $("#bot-start").onclick = startBot;

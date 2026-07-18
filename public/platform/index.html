@@ -8,7 +8,7 @@
   <link rel="icon" href="/platform/assets/icon.svg">
   <link rel="manifest" href="/platform/manifest.webmanifest">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-  <link rel="stylesheet" href="/platform/assets/app.css?v=13">
+  <link rel="stylesheet" href="/platform/assets/app.css?v=14">
   <script>
     // Apply saved theme before first paint (default light).
     (function () { try { if (localStorage.getItem('starx-theme') === 'dark') document.documentElement.classList.add('dark'); } catch (e) {} })();
@@ -66,6 +66,7 @@
       <button class="nav" data-view="points"><svg class="ic"><use href="#i-pin"/></svg> Puntos</button>
       <button class="nav" data-view="workers"><svg class="ic"><use href="#i-users"/></svg> Trabajadores</button>
       <button class="nav" data-view="visits"><svg class="ic"><use href="#i-check"/></svg> Visitas</button>
+      <button class="nav" data-view="stats"><svg class="ic"><use href="#i-chart"/></svg> Estadísticas</button>
       <div class="nav-label" style="margin-top:8px">Herramientas</div>
       <button class="nav" data-view="bot"><svg class="ic"><use href="#i-send"/></svg> Bot de Telegram</button>
       <button class="nav" data-view="import"><svg class="ic"><use href="#i-import"/></svg> Importar y configurar</button>
@@ -192,6 +193,85 @@
           <button class="btn ghost sm" id="visits-clear-dates">Limpiar fechas</button>
         </div>
         <div id="visits-wrap"><div class="empty">Cargando…</div></div>
+      </section>
+
+      <!-- ══════════════════ ESTADÍSTICAS ══════════════════ -->
+      <section class="view" id="view-stats">
+        <div class="view-head">
+          <div><h1 class="h1">Estadísticas</h1><p class="lead">Rendimiento del equipo y de cada trabajador, por periodo.</p></div>
+          <div class="toolbar"><button class="btn ghost" id="stats-reload"><svg class="ic"><use href="#i-refresh"/></svg> Actualizar</button></div>
+        </div>
+
+        <div class="filterbar">
+          <div class="seg" id="stats-mode">
+            <button class="seg-btn active" data-mode="company"><svg class="ic"><use href="#i-globe"/></svg> Empresa</button>
+            <button class="seg-btn" data-mode="personal"><svg class="ic"><use href="#i-users"/></svg> Personal</button>
+          </div>
+          <select id="stats-worker" class="hidden"><option value="">Elige un trabajador…</option></select>
+          <select id="stats-period">
+            <option value="7">Últimos 7 días</option>
+            <option value="30" selected>Últimos 30 días</option>
+            <option value="90">Últimos 90 días</option>
+            <option value="0">Todo el histórico</option>
+          </select>
+        </div>
+
+        <!-- KPIs (shared row; labels swap between company and personal) -->
+        <div class="grid grid-4" id="stats-kpis">
+          <div class="card kpi"><div class="lbl"><svg class="ic"><use href="#i-check"/></svg> <span id="sk1-lbl">Check-ins</span></div><div class="num" id="sk1">–</div><div class="sub" id="sk1-sub">en el periodo</div></div>
+          <div class="card kpi"><div class="lbl"><svg class="ic"><use href="#i-clock"/></svg> <span id="sk2-lbl">Días activos</span></div><div class="num" id="sk2">–</div><div class="sub" id="sk2-sub">con al menos 1 check-in</div></div>
+          <div class="card kpi"><div class="lbl"><svg class="ic"><use href="#i-chart"/></svg> <span id="sk3-lbl">Media por día activo</span></div><div class="num" id="sk3">–</div><div class="sub" id="sk3-sub">check-ins</div></div>
+          <div class="card kpi"><div class="lbl"><svg class="ic"><use href="#i-pin"/></svg> <span id="sk4-lbl">Puntos cubiertos</span></div><div class="num" id="sk4">–</div><div class="sub" id="sk4-sub">visitados al menos una vez</div></div>
+        </div>
+
+        <div class="grid mt">
+          <div class="card chart-card">
+            <p class="ct"><svg class="ic"><use href="#i-chart"/></svg> <span id="stats-line-title">Actividad en el periodo</span></p>
+            <div class="chart" id="stats-line"><div class="empty">Sin datos</div></div>
+          </div>
+        </div>
+
+        <!-- Company-only widgets -->
+        <div id="stats-company">
+          <div class="grid grid-2 mt">
+            <div class="card chart-card">
+              <p class="ct">🏆 Ranking de trabajadores</p>
+              <div class="barlist" id="stats-ranking"><div class="empty">Sin datos</div></div>
+            </div>
+            <div class="card chart-card">
+              <p class="ct"><svg class="ic"><use href="#i-pin"/></svg> Puntos más visitados</p>
+              <div class="barlist" id="stats-toppoints"><div class="empty">Sin datos</div></div>
+            </div>
+          </div>
+          <div class="grid grid-2 mt">
+            <div class="card chart-card">
+              <p class="ct"><svg class="ic"><use href="#i-clock"/></svg> Check-ins por hora del día</p>
+              <div class="chart-sm" id="stats-hours"><div class="empty">Sin datos</div></div>
+            </div>
+            <div class="card chart-card">
+              <p class="ct"><svg class="ic"><use href="#i-chart"/></svg> Check-ins por día de la semana</p>
+              <div class="chart-sm" id="stats-weekday"><div class="empty">Sin datos</div></div>
+            </div>
+          </div>
+          <div class="section-title">🔔 Requiere atención</div>
+          <div class="grid grid-4" id="stats-attn"></div>
+        </div>
+
+        <!-- Personal-only widgets -->
+        <div id="stats-personal" class="hidden">
+          <div class="grid grid-2 mt">
+            <div class="card chart-card">
+              <p class="ct"><svg class="ic"><use href="#i-pin"/></svg> Cobertura de sus puntos asignados</p>
+              <div class="barlist" id="stats-p-coverage"><div class="empty">Sin datos</div></div>
+            </div>
+            <div class="card chart-card">
+              <p class="ct"><svg class="ic"><use href="#i-clock"/></svg> Sus puntos más visitados</p>
+              <div class="barlist" id="stats-p-points"><div class="empty">Sin datos</div></div>
+            </div>
+          </div>
+          <div class="section-title"><svg class="ic"><use href="#i-check"/></svg> Últimos check-ins</div>
+          <div id="stats-p-table"><div class="empty">Elige un trabajador arriba.</div></div>
+        </div>
       </section>
 
       <!-- ══════════════════ BOT ══════════════════ -->
@@ -405,6 +485,6 @@
   <div class="toast" id="toast"></div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script src="/platform/assets/app.js?v=13"></script>
+  <script src="/platform/assets/app.js?v=14"></script>
 </body>
 </html>

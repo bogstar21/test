@@ -335,6 +335,35 @@ a:hover { text-decoration: underline; }
 .xls-example .tag.opt { background: var(--glass-2); color: var(--faint); border: 1px solid var(--border); }
 .field label .ic { width: 15px; height: 15px; vertical-align: -2px; margin-right: 4px; color: var(--faint); }
 
+/* ── Statistics view ───────────────────────────────────────────────────── */
+/* Segmented switch (Empresa | Personal), holodBot-style view toggle. */
+.seg { display: inline-flex; gap: 4px; padding: 4px; background: var(--glass); border: 1px solid var(--border); border-radius: var(--radius); }
+.seg-btn {
+  display: inline-flex; align-items: center; gap: 7px; height: 30px; padding: 0 13px;
+  border: 0; border-radius: calc(var(--radius) - 3px); background: transparent;
+  color: var(--dim); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer;
+  transition: background .14s ease, color .14s ease;
+}
+.seg-btn .ic { width: 15px; height: 15px; }
+.seg-btn:hover { color: var(--text); }
+.seg-btn.active { background: var(--grad-soft); color: var(--strong); cursor: default; }
+
+/* "Requiere atención" cards. */
+.card.attn { padding: 18px 20px; border-left: 3px solid var(--border-strong); }
+.card.attn .attn-num { font-size: 28px; font-weight: 800; letter-spacing: -0.03em; color: var(--strong); line-height: 1; }
+.card.attn .attn-lbl { font-size: 12.5px; color: var(--dim); margin-top: 6px; font-weight: 600; }
+.card.attn .attn-hint { font-size: 11.5px; color: var(--faint); margin-top: 8px; line-height: 1.5; }
+.card.attn .attn-hint.ok { color: #22c55e; }
+.card.attn.rose   { border-left-color: #f43f5e; } .card.attn.rose .attn-num { color: #f43f5e; }
+.card.attn.amber  { border-left-color: #f59e0b; } .card.attn.amber .attn-num { color: #f59e0b; }
+.card.attn.indigo { border-left-color: #6366f1; } .card.attn.indigo .attn-num { color: #6366f1; }
+.card.attn.slate  { border-left-color: var(--faint); }
+
+/* 24 hour-of-day columns are narrower than the 7 weekday ones. */
+.wd-bars.hours .wd-col { min-width: 0; }
+.wd-bars.hours .wd-val { font-size: 9px; }
+.wd-bars.hours .wd-lbl { font-size: 9px; }
+
 /* Pending bot-registration attempts (Workers view). */
 .pending-card { margin-bottom: 14px; border-color: var(--accent); }
 .pending-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 10px 0; border-top: 1px solid var(--border); }
