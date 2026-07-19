@@ -88,7 +88,7 @@
     applyMapTheme();
     markers = L.layerGroup().addTo(map);
   }
-  var SRC_COLOR = { bot: "#6366f1", pwa: "#22c55e" };
+  var SRC_COLOR = { bot: "#9aa1ad", pwa: "#22c55e" };
   var mapLegend = null;
   function ensureLegend() {
     if (mapLegend || !map || typeof L === "undefined") return;
@@ -190,7 +190,7 @@
     }
     var linePts = vals.map(function (val, i) { return x(i) + "," + y(val); }).join(" ");
     var areaPts = padL + "," + (padT + ih) + " " + linePts + " " + (W - padR) + "," + (padT + ih);
-    var dots = vals.map(function (val, i) { return '<circle cx="' + x(i) + '" cy="' + y(val) + '" r="3" fill="#6366f1"/>'; }).join("");
+    var dots = vals.map(function (val, i) { return '<circle cx="' + x(i) + '" cy="' + y(val) + '" r="3" fill="#9aa1ad"/>'; }).join("");
     var xlabels = labels.map(function (l, i) {
       if (i % 2 !== 0 && i !== labels.length - 1) return "";
       return '<text class="axis-lbl" x="' + x(i) + '" y="' + (H - 6) + '" text-anchor="middle">' + esc(l.short) + "</text>";
@@ -204,11 +204,11 @@
     box.innerHTML =
       '<svg viewBox="0 0 ' + W + " " + H + '" preserveAspectRatio="none" role="img">' +
       '<defs><linearGradient id="carea" x1="0" y1="0" x2="0" y2="1">' +
-      '<stop offset="0%" stop-color="#6366f1" stop-opacity="0.28"/>' +
-      '<stop offset="100%" stop-color="#6366f1" stop-opacity="0"/></linearGradient></defs>' +
+      '<stop offset="0%" stop-color="#9aa1ad" stop-opacity="0.28"/>' +
+      '<stop offset="100%" stop-color="#9aa1ad" stop-opacity="0"/></linearGradient></defs>' +
       gridLines + ylabels +
       '<polygon points="' + areaPts + '" fill="url(#carea)"/>' +
-      '<polyline points="' + linePts + '" fill="none" stroke="#6366f1" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>' +
+      '<polyline points="' + linePts + '" fill="none" stroke="#9aa1ad" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>' +
       dots + xlabels + "</svg>";
   }
 
@@ -230,12 +230,12 @@
       '<div class="donut-wrap">' +
       '<svg viewBox="0 0 140 140" width="132" height="132" role="img">' +
       '<circle cx="' + cx + '" cy="' + cy + '" r="' + r + '" fill="none" stroke="var(--glass-2)" stroke-width="18"/>' +
-      seg("#6366f1", f1, 0) + seg("#22c55e", counts.pwa / total, f1) +
+      seg("#9aa1ad", f1, 0) + seg("#22c55e", counts.pwa / total, f1) +
       '<text x="' + cx + '" y="' + (cy - 1) + '" text-anchor="middle" font-size="26" font-weight="700" fill="var(--strong)">' + total + '</text>' +
       '<text x="' + cx + '" y="' + (cy + 16) + '" text-anchor="middle" font-size="11" fill="var(--faint)">check-ins</text>' +
       '</svg>' +
       '<div class="donut-legend">' +
-        '<div><span class="dot" style="background:#6366f1"></span> Bot <b>' + counts.bot + '</b> <span class="muted">' + Math.round(f1 * 100) + '%</span></div>' +
+        '<div><span class="dot" style="background:#9aa1ad"></span> Bot <b>' + counts.bot + '</b> <span class="muted">' + Math.round(f1 * 100) + '%</span></div>' +
         '<div><span class="dot" style="background:#22c55e"></span> App <b>' + counts.pwa + '</b> <span class="muted">' + Math.round((counts.pwa / total) * 100) + '%</span></div>' +
       '</div></div>';
   }
@@ -695,7 +695,7 @@
     var areaPts = padL + "," + (padT + ih) + " " + linePts + " " + (W - padR) + "," + (padT + ih);
     var step = Math.max(1, Math.round(labels.length / 8));
     var dots = labels.length <= 60
-      ? vals.map(function (val, i) { return '<circle cx="' + x(i) + '" cy="' + y(val) + '" r="3" fill="#6366f1"/>'; }).join("")
+      ? vals.map(function (val, i) { return '<circle cx="' + x(i) + '" cy="' + y(val) + '" r="3" fill="#9aa1ad"/>'; }).join("")
       : "";
     var xlabels = labels.map(function (l, i) {
       if (i % step !== 0 && i !== labels.length - 1) return "";
@@ -708,11 +708,11 @@
     box.innerHTML =
       '<svg viewBox="0 0 ' + W + " " + H + '" preserveAspectRatio="none" role="img">' +
       '<defs><linearGradient id="sarea" x1="0" y1="0" x2="0" y2="1">' +
-      '<stop offset="0%" stop-color="#6366f1" stop-opacity="0.28"/>' +
-      '<stop offset="100%" stop-color="#6366f1" stop-opacity="0"/></linearGradient></defs>' +
+      '<stop offset="0%" stop-color="#9aa1ad" stop-opacity="0.28"/>' +
+      '<stop offset="100%" stop-color="#9aa1ad" stop-opacity="0"/></linearGradient></defs>' +
       grid + ylabels +
       '<polygon points="' + areaPts + '" fill="url(#sarea)"/>' +
-      '<polyline points="' + linePts + '" fill="none" stroke="#6366f1" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>' +
+      '<polyline points="' + linePts + '" fill="none" stroke="#9aa1ad" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>' +
       dots + xlabels + "</svg>";
   }
 
