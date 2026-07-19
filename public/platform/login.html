@@ -26,28 +26,36 @@
       background:#161616; color:#9aa0a6; font-size:14px; cursor:pointer; }
     .tab.on { background:#fff; color:#000; font-weight:600; border-color:#fff; }
     .hide { display:none; }
+    .langsw { position:fixed; top:16px; right:16px; display:inline-flex; padding:3px; gap:2px; border-radius:10px; border:1px solid rgba(255,255,255,.14); background:#111; }
+    .langsw button { border:0; background:transparent; color:#9aa0a6; font:inherit; font-size:11px; font-weight:700; padding:4px 7px; border-radius:7px; cursor:pointer; }
+    .langsw button.on { background:rgba(255,255,255,.14); color:#fff; }
   </style>
 </head>
 <body>
+  <div class="langsw" id="lang-switch">
+    <button data-lang-btn="en" type="button">EN</button>
+    <button data-lang-btn="es" type="button">ES</button>
+    <button data-lang-btn="uk" type="button">UA</button>
+  </div>
   <div class="box">
     <h1 class="brand">LogiFlow</h1>
-    <p class="sub">Logistics check-in platform</p>
+    <p class="sub">Plataforma de check-in de campo</p>
 
     <div class="tabs">
-      <button type="button" class="tab on" id="tab-mgr">Manager</button>
+      <button type="button" class="tab on" id="tab-mgr">Gestor</button>
       <button type="button" class="tab" id="tab-wrk">Trabajador</button>
       <button type="button" class="tab" id="tab-new">Crear empresa</button>
     </div>
 
-    <div class="err" id="err" style="display:none">Wrong password. Try again.</div>
+    <div class="err" id="err" style="display:none">Contraseña incorrecta. Inténtalo de nuevo.</div>
     <div class="err" id="werr" style="display:none"></div>
     <div class="err" id="serr" style="display:none"></div>
 
     <!-- Manager: password -->
     <form method="POST" action="/auth/login" id="form">
-      <label for="password">Password</label>
+      <label for="password">Contraseña</label>
       <input type="password" id="password" name="password" autocomplete="current-password" required>
-      <button type="submit">Sign in</button>
+      <button type="submit">Iniciar sesión</button>
     </form>
 
     <!-- New company: self-service signup (14-day trial) -->
@@ -70,6 +78,7 @@
     </form>
   </div>
 
+  <script src="/platform/assets/i18n.js?v=18"></script>
   <script>
     var p = new URLSearchParams(location.search);
     if (p.get("e")) document.getElementById("err").style.display = "block";

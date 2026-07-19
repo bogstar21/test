@@ -299,8 +299,9 @@
     var scope = $("#dash-scope");
     if (scope) {
       var active = dashFilters.worker || dashFilters.source || dashFilters.from || dashFilters.to;
-      scope.textContent = (active ? "Filtrado: " : "Mostrando ") + list.length + " de " +
-        (lastRecent || []).length + " check-ins recientes" + (active ? ". Los KPIs de arriba son totales globales." : ".");
+      var T = (window.LF && window.LF.t) ? window.LF.t : function (s) { return s; };
+      scope.textContent = (active ? T("Filtrado:") : T("Mostrando")) + " " + list.length + " " + T("de") + " " +
+        (lastRecent || []).length + " " + T("check-ins recientes") + (active ? ". " + T("Los KPIs de arriba son totales globales.") : ".");
     }
   }
 
@@ -458,7 +459,7 @@
     });
   }
   async function delPoint(row) {
-    if (!confirm("¿Borrar este punto?")) return;
+    if (!confirm(window.LF.t("¿Borrar este punto?"))) return;
     try { await api("/api/points/" + row, { method: "DELETE" }); toast("Borrado"); loadPoints(); } catch (e) { toast(e.message, true); }
   }
 
@@ -548,7 +549,7 @@
     });
   }
   async function delWorker(row) {
-    if (!confirm("¿Borrar este trabajador?")) return;
+    if (!confirm(window.LF.t("¿Borrar este trabajador?"))) return;
     try { await api("/api/workers/" + row, { method: "DELETE" }); toast("Borrado"); loadWorkers(); } catch (e) { toast(e.message, true); }
   }
 
@@ -808,7 +809,8 @@
       // Company KPIs: points covered = active points visited ≥1 time in the period.
       var covered = activePoints.filter(function (p) { return visitedIds[String(p.id)]; }).length;
       setKpiLabels("Check-ins", "en el periodo", "Días activos", "con al menos 1 check-in",
-        "Media por día activo", "check-ins", "Puntos cubiertos", "de " + activePoints.length + " activos");
+        "Media por día activo", "check-ins", "Puntos cubiertos",
+        ((window.LF && window.LF.t) ? window.LF.t("de") : "de") + " " + activePoints.length + " " + ((window.LF && window.LF.t) ? window.LF.t("activos") : "activos"));
       $("#sk4").textContent = covered;
 
       var byWorker = {}, byPoint = {};
@@ -970,7 +972,7 @@
     finally { btn.disabled = false; btn.innerHTML = '<svg class="ic"><use href="#i-power"/></svg> Encender bot'; }
   }
   async function stopBot() {
-    if (!confirm("¿Apagar el bot? Los trabajadores no podrán hacer check-in hasta que vuelva a encenderse.")) return;
+    if (!confirm(window.LF.t("¿Apagar el bot? Los trabajadores no podrán hacer check-in hasta que vuelva a encenderse."))) return;
     try { renderBot(await api("/api/bot/stop", { method: "POST" })); toast("Bot apagado"); }
     catch (e) { toast(e.message, true); }
   }
@@ -1131,7 +1133,7 @@
     }
   }
   async function generateConnectorKey() {
-    if (!confirm("¿Regenerar la clave? La anterior dejará de funcionar de inmediato.")) return;
+    if (!confirm(window.LF.t("¿Regenerar la clave? La anterior dejará de funcionar de inmediato."))) return;
     var btn = $("#conn-key-gen"); btn.disabled = true;
     try { renderSettings(await api("/api/connector/key", { method: "POST" })); toast("Clave regenerada"); }
     catch (e) { toast(e.message, true); }
@@ -1349,6 +1351,13 @@
       };
     });
 
+    // Re-render the active view when the language changes so JS-built strings update too.
+    window.addEventListener("lf-lang", function () {
+      var a = document.querySelector(".nav.active");
+      if (a && a.dataset.view) showView(a.dataset.view);
+      else if (state.role === "worker") loadCheckin();
+    });
+
     // Bot
     $("#bot-start").onclick = startBot;
     $("#bot-stop").onclick = stopBot;
@@ -1389,7 +1398,7 @@
       catch (err) { toast(err.message, true); }
     };
     $("#setup-btn").onclick = async function () {
-      if (!confirm("¿Crear las pestañas workers / points / visits en tu hoja conectada?")) return;
+      if (!confirm(window.LF.t("¿Crear las pestañas workers / points / visits en tu hoja conectada?"))) return;
       try { var res = await api("/api/setup", { method: "POST" }); toast(res.created && res.created.length ? "Creadas: " + res.created.join(", ") : "La hoja ya está lista"); }
       catch (e) { toast(e.message, true); }
     };
