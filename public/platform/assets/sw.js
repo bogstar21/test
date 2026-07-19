@@ -1,6 +1,6 @@
-// StarX platform service worker. Cache-first for /platform/assets (URLs carry ?v= so
+// LogiFlow platform service worker. Cache-first for /platform/assets (URLs carry ?v= so
 // a bump invalidates them). Everything else (API, HTML) always hits the network.
-var CACHE = "starx-shell-v1";
+var CACHE = "logiflow-shell-v1";
 var ASSETS = ["/platform/assets/app.css?v=1", "/platform/assets/app.js?v=1", "/platform/assets/icon.svg"];
 
 self.addEventListener("install", function (e) {

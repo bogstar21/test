@@ -75,7 +75,7 @@ function startServer(deps = {}) {
   // before serving. No-op without a platform DB (memory/sheets keep the env default).
   require("./tenants").reload().catch(e => console.error("tenants.reload:", e && e.message));
   app.listen(config.PORT, () => {
-    console.log(`🌐 StarX platform on :${config.PORT}`);
+    console.log(`🌐 LogiFlow platform on :${config.PORT}`);
     if (!config.PLATFORM_PASSWORD) console.log("⚠️  PLATFORM_PASSWORD not set — set it in Railway to enable login.");
     if (!process.env.SESSION_SECRET) console.log("⚠️  SESSION_SECRET not set — sessions reset on every restart. Set it in Railway.");
 

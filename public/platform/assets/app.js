@@ -1,4 +1,4 @@
-/* StarX platform — vanilla JS SPA. Talks only to /api/* (the datasource seam). */
+/* LogiFlow platform — vanilla JS SPA. Talks only to /api/* (the datasource seam). */
 (function () {
   "use strict";
 
@@ -616,7 +616,7 @@
         visits.map(function (v) { return cols.map(function (c) { return csvCell(v[c]); }).join(","); }).join("\n");
       var url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8;" }));
       var a = document.createElement("a");
-      a.href = url; a.download = "starx-visitas-" + new Date().toISOString().slice(0, 10) + ".csv";
+      a.href = url; a.download = "logiflow-visitas-" + new Date().toISOString().slice(0, 10) + ".csv";
       document.body.appendChild(a); a.click(); document.body.removeChild(a);
       setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
       toast("Descargando " + visits.length + " visitas");
@@ -1126,7 +1126,7 @@
     // Reflect the real key + this deployment's URL in the curl example.
     var curl = $("#conn-curl");
     if (curl) {
-      var origin = location.origin || "https://starx.up.railway.app";
+      var origin = location.origin || "https://logiflow.app";
       curl.textContent = 'curl -H "X-API-Key: ' + (key || "TU_CLAVE") + '" \\\n  ' + origin + "/api/v1/visits?limit=500";
     }
   }

@@ -274,7 +274,7 @@ function mountAuthRoutes(app) {
 // ─── Tiny inline "not configured" page (no external assets) ─────────────────────
 function notConfiguredPage() {
   return '<!doctype html><html lang="en"><head><meta charset="utf-8">' +
-    '<meta name="viewport" content="width=device-width,initial-scale=1"><title>StarX — setup</title>' +
+    '<meta name="viewport" content="width=device-width,initial-scale=1"><title>LogiFlow — setup</title>' +
     '<style>body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;' +
     'font-family:system-ui,Segoe UI,Roboto,sans-serif;background:#000;color:#ededed}' +
     '.box{max-width:440px;padding:32px;background:#0a0a0a;border:1px solid rgba(255,255,255,.1);border-radius:14px;text-align:center}' +

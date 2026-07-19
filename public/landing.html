@@ -3,100 +3,114 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>StarX — Check-ins de campo con GPS y fotos</title>
-  <meta name="description" content="StarX es la plataforma de check-in para equipos de campo: tus trabajadores fichan cada parada con GPS y foto desde Telegram o el móvil, y tú lo ves todo en vivo.">
+  <title>LogiFlow — Check-ins de campo con GPS y fotos</title>
+  <meta name="description" data-i18n="meta.desc" content="LogiFlow: check-in para equipos de campo con GPS y foto, desde Telegram o el móvil.">
   <link rel="icon" href="/platform/assets/icon.svg">
   <style>
     :root{
-      --bg:#000; --bg2:#0a0a0a; --line:rgba(255,255,255,.10); --line2:rgba(255,255,255,.16);
-      --text:#ededed; --dim:#b4b8bf; --faint:#7c828b; --accent:#6366f1; --accent2:#8b8cf7;
-      --radius:14px;
+      --bg:#05060a; --panel:rgba(255,255,255,.04); --line:rgba(255,255,255,.10); --line2:rgba(255,255,255,.18);
+      --text:#eef0f4; --dim:#aab0bd; --faint:#6f7684; --accent:#7c7ff5; --accent-ink:#a9abfb;
+      --radius:16px;
     }
     *{box-sizing:border-box}
     html{scroll-behavior:smooth}
     body{margin:0;background:var(--bg);color:var(--text);
-      font-family:system-ui,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;line-height:1.6;-webkit-font-smoothing:antialiased}
+      font-family:system-ui,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;line-height:1.6;-webkit-font-smoothing:antialiased;
+      background-image:
+        radial-gradient(60vw 40vh at 50% -8%, rgba(124,127,245,.18), transparent 70%),
+        radial-gradient(40vw 30vh at 92% 12%, rgba(99,102,241,.10), transparent 70%);
+      background-attachment:fixed}
     a{color:inherit;text-decoration:none}
     .wrap{max-width:1080px;margin:0 auto;padding:0 22px}
-    .btn{display:inline-flex;align-items:center;gap:8px;height:44px;padding:0 20px;border-radius:11px;
-      font-weight:600;font-size:15px;cursor:pointer;border:1px solid transparent;transition:.15s}
-    .btn.primary{background:var(--accent);color:#fff}
-    .btn.primary:hover{background:var(--accent2)}
-    .btn.ghost{background:transparent;color:var(--text);border-color:var(--line2)}
-    .btn.ghost:hover{background:rgba(255,255,255,.06)}
-    .btn.sm{height:38px;padding:0 15px;font-size:14px}
 
-    /* Nav */
-    header{position:sticky;top:0;z-index:10;background:rgba(0,0,0,.72);backdrop-filter:blur(12px);
-      border-bottom:1px solid var(--line)}
-    .nav{display:flex;align-items:center;justify-content:space-between;height:64px}
+    /* ── Liquid glass buttons ─────────────────────────────────────────── */
+    .btn{position:relative;display:inline-flex;align-items:center;justify-content:center;gap:8px;
+      height:46px;padding:0 22px;border-radius:13px;font-weight:600;font-size:15px;cursor:pointer;
+      border:1px solid var(--line2);color:var(--text);isolation:isolate;
+      background:rgba(255,255,255,.06);
+      backdrop-filter:blur(14px) saturate(160%);-webkit-backdrop-filter:blur(14px) saturate(160%);
+      box-shadow:inset 0 1px 0 rgba(255,255,255,.22), inset 0 -8px 20px -12px rgba(255,255,255,.15), 0 8px 30px -14px rgba(0,0,0,.8);
+      transition:transform .16s ease, box-shadow .16s ease, background .16s ease}
+    .btn::before{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;z-index:-1;
+      background:linear-gradient(180deg, rgba(255,255,255,.18), rgba(255,255,255,0) 42%)}
+    .btn:hover{transform:translateY(-1px);box-shadow:inset 0 1px 0 rgba(255,255,255,.28), 0 14px 40px -14px rgba(0,0,0,.85)}
+    .btn.primary{border-color:rgba(150,152,255,.55);
+      background:linear-gradient(135deg, rgba(124,127,245,.55), rgba(79,70,229,.42));
+      box-shadow:inset 0 1px 0 rgba(255,255,255,.35), 0 10px 34px -10px rgba(99,102,241,.75)}
+    .btn.primary:hover{background:linear-gradient(135deg, rgba(139,140,247,.7), rgba(89,80,239,.55))}
+    .btn.sm{height:38px;padding:0 15px;font-size:14px;border-radius:11px}
+
+    /* ── Nav ──────────────────────────────────────────────────────────── */
+    header{position:sticky;top:0;z-index:20;background:rgba(5,6,10,.6);
+      backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border-bottom:1px solid var(--line)}
+    .nav{display:flex;align-items:center;justify-content:space-between;height:66px;gap:14px}
     .brand{display:flex;align-items:center;gap:10px;font-weight:700;font-size:20px;letter-spacing:-.02em}
-    .mark{width:30px;height:30px;border-radius:9px;display:inline-flex;align-items:center;justify-content:center;
-      background:linear-gradient(135deg,var(--accent),#4f46e5);color:#fff}
+    .mark{width:31px;height:31px;border-radius:10px;display:inline-flex;align-items:center;justify-content:center;
+      background:linear-gradient(135deg,#8b8cf7,#4f46e5);color:#fff;
+      box-shadow:inset 0 1px 0 rgba(255,255,255,.4),0 6px 18px -6px rgba(99,102,241,.8)}
     .mark svg{width:18px;height:18px}
-    .nav-cta{display:flex;align-items:center;gap:10px}
     .nav-links{display:flex;gap:26px;font-size:14px;color:var(--dim)}
     .nav-links a:hover{color:var(--text)}
-    @media(max-width:760px){.nav-links{display:none}}
+    .nav-cta{display:flex;align-items:center;gap:10px}
+    /* language switch (glass segmented) */
+    .lang{display:inline-flex;padding:3px;gap:2px;border-radius:11px;border:1px solid var(--line);
+      background:rgba(255,255,255,.05);backdrop-filter:blur(12px)}
+    .lang button{border:0;background:transparent;color:var(--faint);font:inherit;font-size:12px;font-weight:700;
+      padding:5px 9px;border-radius:8px;cursor:pointer;letter-spacing:.03em}
+    .lang button.on{background:rgba(255,255,255,.12);color:var(--text);box-shadow:inset 0 1px 0 rgba(255,255,255,.2)}
+    @media(max-width:860px){.nav-links{display:none}}
+    @media(max-width:560px){.nav-cta .btn:not(.primary){display:none}}
 
-    /* Hero */
-    .hero{text-align:center;padding:88px 0 64px;position:relative;overflow:hidden}
-    .hero::before{content:"";position:absolute;top:-160px;left:50%;transform:translateX(-50%);
-      width:760px;height:420px;background:radial-gradient(circle,rgba(99,102,241,.22),transparent 65%);
-      filter:blur(20px);pointer-events:none}
-    .pill{display:inline-flex;align-items:center;gap:8px;padding:6px 13px;border:1px solid var(--line2);
-      border-radius:999px;font-size:12.5px;color:var(--dim);margin-bottom:22px}
-    .pill .dot{width:7px;height:7px;border-radius:50%;background:#22c55e;box-shadow:0 0 8px #22c55e}
-    h1{font-size:clamp(34px,6vw,58px);line-height:1.05;letter-spacing:-.035em;margin:0 0 18px;font-weight:800}
-    h1 .grad{background:linear-gradient(120deg,#a5a6f8,#6366f1);-webkit-background-clip:text;background-clip:text;color:transparent}
-    .lead{font-size:clamp(16px,2.2vw,20px);color:var(--dim);max-width:640px;margin:0 auto 30px}
+    /* ── Hero ─────────────────────────────────────────────────────────── */
+    .hero{text-align:center;padding:96px 0 68px}
+    .pill{display:inline-flex;align-items:center;gap:8px;padding:7px 14px;border:1px solid var(--line2);
+      border-radius:999px;font-size:12.5px;color:var(--dim);margin-bottom:24px;
+      background:rgba(255,255,255,.04);backdrop-filter:blur(10px)}
+    .pill .dot{width:7px;height:7px;border-radius:50%;background:#34d399;box-shadow:0 0 10px #34d399}
+    h1{font-size:clamp(36px,6.2vw,62px);line-height:1.04;letter-spacing:-.035em;margin:0 0 20px;font-weight:800}
+    h1 .grad{background:linear-gradient(120deg,#b9baff,#7c7ff5 60%);-webkit-background-clip:text;background-clip:text;color:transparent}
+    .lead{font-size:clamp(16px,2.2vw,20px);color:var(--dim);max-width:650px;margin:0 auto 32px}
     .hero-cta{display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
-    .hero-note{margin-top:16px;font-size:13px;color:var(--faint)}
+    .hero-note{margin-top:18px;font-size:13px;color:var(--faint)}
 
-    section{padding:64px 0;border-top:1px solid var(--line)}
-    .sec-h{text-align:center;max-width:620px;margin:0 auto 44px}
-    .sec-h h2{font-size:clamp(26px,4vw,36px);letter-spacing:-.03em;margin:0 0 12px;font-weight:750}
+    section{padding:66px 0;border-top:1px solid var(--line)}
+    .sec-h{text-align:center;max-width:640px;margin:0 auto 46px}
+    .sec-h h2{font-size:clamp(26px,4vw,37px);letter-spacing:-.03em;margin:0 0 12px;font-weight:750}
     .sec-h p{color:var(--dim);margin:0;font-size:16px}
-    .eyebrow{font-size:12px;text-transform:uppercase;letter-spacing:.12em;color:var(--accent2);font-weight:700;margin-bottom:10px}
+    .eyebrow{font-size:12px;text-transform:uppercase;letter-spacing:.14em;color:var(--accent-ink);font-weight:700;margin-bottom:10px}
 
-    /* Steps */
-    .steps{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
-    .step{background:var(--bg2);border:1px solid var(--line);border-radius:var(--radius);padding:26px}
-    .step .n{width:34px;height:34px;border-radius:9px;background:rgba(99,102,241,.14);color:var(--accent2);
-      display:flex;align-items:center;justify-content:center;font-weight:700;margin-bottom:14px}
-    .step h3{margin:0 0 6px;font-size:17px}
-    .step p{margin:0;color:var(--dim);font-size:14.5px}
-
-    /* Features */
-    .feat{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
-    .card{background:var(--bg2);border:1px solid var(--line);border-radius:var(--radius);padding:24px}
-    .card .ico{font-size:22px;margin-bottom:12px;display:block}
-    .card h3{margin:0 0 7px;font-size:16px}
-    .card p{margin:0;color:var(--dim);font-size:14px}
-    @media(max-width:760px){.steps,.feat{grid-template-columns:1fr}}
+    .glass{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);
+      backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);
+      box-shadow:inset 0 1px 0 rgba(255,255,255,.08)}
+    .steps,.feat{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
+    .step,.card{padding:26px}
+    .step .n{width:36px;height:36px;border-radius:10px;background:rgba(124,127,245,.16);color:var(--accent-ink);
+      display:flex;align-items:center;justify-content:center;font-weight:700;margin-bottom:14px;
+      box-shadow:inset 0 1px 0 rgba(255,255,255,.18)}
+    .step h3,.card h3{margin:0 0 6px;font-size:17px}
+    .step p,.card p{margin:0;color:var(--dim);font-size:14.5px}
+    .card .ico{font-size:23px;margin-bottom:12px;display:block}
+    @media(max-width:820px){.steps,.feat{grid-template-columns:1fr}}
 
     /* Pricing */
     .prices{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;align-items:stretch}
-    .price{background:var(--bg2);border:1px solid var(--line);border-radius:16px;padding:28px;display:flex;flex-direction:column}
-    .price.hot{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent),0 12px 40px -12px rgba(99,102,241,.5)}
-    .price .tier{font-size:14px;font-weight:700;color:var(--accent2);text-transform:uppercase;letter-spacing:.06em}
-    .price .amt{font-size:40px;font-weight:800;letter-spacing:-.03em;margin:10px 0 2px}
+    .price{padding:28px;display:flex;flex-direction:column}
+    .price.hot{border-color:rgba(150,152,255,.6);box-shadow:0 0 0 1px rgba(124,127,245,.5),0 20px 60px -20px rgba(99,102,241,.55),inset 0 1px 0 rgba(255,255,255,.12)}
+    .price .tier{font-size:13px;font-weight:700;color:var(--accent-ink);text-transform:uppercase;letter-spacing:.06em}
+    .price .amt{font-size:42px;font-weight:800;letter-spacing:-.03em;margin:10px 0 2px}
     .price .amt span{font-size:15px;font-weight:500;color:var(--faint)}
     .price .who{color:var(--dim);font-size:14px;margin:0 0 18px}
     .price ul{list-style:none;margin:0 0 22px;padding:0;flex:1}
     .price li{padding:7px 0;color:var(--dim);font-size:14.5px;display:flex;gap:9px}
-    .price li::before{content:"✓";color:#22c55e;font-weight:700}
-    .tag-hot{display:inline-block;margin-left:8px;padding:2px 9px;border-radius:999px;background:var(--accent);
-      color:#fff;font-size:11px;font-weight:700;vertical-align:middle}
-    @media(max-width:760px){.prices{grid-template-columns:1fr}}
+    .price li::before{content:"✓";color:#34d399;font-weight:700}
+    .tag-hot{display:inline-block;margin-left:8px;padding:2px 9px;border-radius:999px;
+      background:linear-gradient(135deg,#8b8cf7,#4f46e5);color:#fff;font-size:11px;font-weight:700;vertical-align:middle}
+    @media(max-width:820px){.prices{grid-template-columns:1fr}}
 
-    /* Final CTA */
     .final{text-align:center}
-    .final .box{background:linear-gradient(135deg,rgba(99,102,241,.14),rgba(99,102,241,.03));
-      border:1px solid var(--line2);border-radius:20px;padding:56px 28px}
+    .final .box{padding:58px 28px;border-radius:22px}
     .final h2{font-size:clamp(26px,4vw,38px);letter-spacing:-.03em;margin:0 0 12px}
     .final p{color:var(--dim);margin:0 0 26px;font-size:17px}
-
     footer{border-top:1px solid var(--line);padding:34px 0;color:var(--faint);font-size:13px}
     .foot{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px}
   </style>
@@ -106,118 +120,215 @@
     <div class="wrap nav">
       <div class="brand">
         <span class="mark"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 0c.7 6.3 5.4 11 11.7 11.7C17.4 12.4 12.7 17 12 23.3 11.3 17 6.6 12.4.3 11.7 6.6 11 11.3 6.3 12 0Z"/></svg></span>
-        StarX
+        LogiFlow
       </div>
       <nav class="nav-links">
-        <a href="#como">Cómo funciona</a>
-        <a href="#features">Características</a>
-        <a href="#precios">Precios</a>
+        <a href="#como" data-i18n="nav.how">Cómo funciona</a>
+        <a href="#features" data-i18n="nav.features">Características</a>
+        <a href="#precios" data-i18n="nav.pricing">Precios</a>
       </nav>
       <div class="nav-cta">
-        <a class="btn ghost sm" href="/platform/login">Iniciar sesión</a>
-        <a class="btn primary sm" href="/platform/login?tab=new">Empezar gratis</a>
+        <div class="lang" id="lang">
+          <button data-lang="en">EN</button>
+          <button data-lang="es">ES</button>
+          <button data-lang="uk">UA</button>
+        </div>
+        <a class="btn ghost sm" href="/platform/login" data-i18n="nav.login">Iniciar sesión</a>
+        <a class="btn primary sm" href="/platform/login?tab=new" data-i18n="nav.start">Empezar gratis</a>
       </div>
     </div>
   </header>
 
-  <!-- HERO -->
   <div class="hero">
     <div class="wrap">
-      <span class="pill"><span class="dot"></span> Check-ins de campo con prueba real</span>
-      <h1>Sabe <span class="grad">quién fue a dónde</span>,<br>cuándo y con foto.</h1>
-      <p class="lead">StarX es la plataforma de check-in para equipos de campo. Tus trabajadores fichan cada parada con <b>GPS + foto</b> desde Telegram o el móvil, y tú lo ves todo en vivo: mapa, estadísticas y cobertura diaria.</p>
+      <span class="pill"><span class="dot"></span> <span data-i18n="hero.badge">Check-ins de campo con prueba real</span></span>
+      <h1><span data-i18n="hero.h1a">Sabe</span> <span class="grad" data-i18n="hero.h1b">quién fue a dónde</span>,<br><span data-i18n="hero.h1c">cuándo y con foto.</span></h1>
+      <p class="lead" data-i18n="hero.lead">LogiFlow es la plataforma de check-in para equipos de campo. Tus trabajadores fichan cada parada con GPS + foto desde Telegram o el móvil, y tú lo ves todo en vivo: mapa, estadísticas y cobertura diaria.</p>
       <div class="hero-cta">
-        <a class="btn primary" href="/platform/login?tab=new">Crear mi empresa gratis</a>
-        <a class="btn ghost" href="#como">Ver cómo funciona</a>
+        <a class="btn primary" href="/platform/login?tab=new" data-i18n="hero.cta1">Crear mi empresa gratis</a>
+        <a class="btn ghost" href="#como" data-i18n="hero.cta2">Ver cómo funciona</a>
       </div>
-      <div class="hero-note">14 días de prueba · sin tarjeta · listo en minutos</div>
+      <div class="hero-note" data-i18n="hero.note">14 días de prueba · sin tarjeta · listo en minutos</div>
     </div>
   </div>
 
-  <!-- CÓMO FUNCIONA -->
   <section id="como">
     <div class="wrap">
       <div class="sec-h">
-        <div class="eyebrow">Cómo funciona</div>
-        <h2>De cero a check-ins en 3 pasos</h2>
-        <p>Sin instalar nada. Tus trabajadores usan el chat que ya tienen.</p>
+        <div class="eyebrow" data-i18n="how.eyebrow">Cómo funciona</div>
+        <h2 data-i18n="how.h2">De cero a check-ins en 3 pasos</h2>
+        <p data-i18n="how.sub">Sin instalar nada. Tus trabajadores usan el chat que ya tienen.</p>
       </div>
       <div class="steps">
-        <div class="step"><div class="n">1</div><h3>Carga tus paradas y tu equipo</h3><p>Sube un Excel o conéctalo por API. Asigna cada punto a un trabajador por su teléfono.</p></div>
-        <div class="step"><div class="n">2</div><h3>El trabajador ficha en el sitio</h3><p>Abre el bot de Telegram (o la app web), elige su parada y comparte ubicación + foto. Un toque.</p></div>
-        <div class="step"><div class="n">3</div><h3>Tú lo ves todo en vivo</h3><p>Panel con mapa, estadísticas por trabajador y punto, y cobertura diaria. Exporta a CSV cuando quieras.</p></div>
+        <div class="step glass"><div class="n">1</div><h3 data-i18n="how.s1t">Carga tus paradas y tu equipo</h3><p data-i18n="how.s1d">Sube un Excel o conéctalo por API. Asigna cada punto a un trabajador por su teléfono.</p></div>
+        <div class="step glass"><div class="n">2</div><h3 data-i18n="how.s2t">El trabajador ficha en el sitio</h3><p data-i18n="how.s2d">Abre el bot de Telegram (o la app web), elige su parada y comparte ubicación + foto. Un toque.</p></div>
+        <div class="step glass"><div class="n">3</div><h3 data-i18n="how.s3t">Tú lo ves todo en vivo</h3><p data-i18n="how.s3d">Panel con mapa, estadísticas por trabajador y punto, y cobertura diaria. Exporta a CSV cuando quieras.</p></div>
       </div>
     </div>
   </section>
 
-  <!-- CARACTERÍSTICAS -->
   <section id="features">
     <div class="wrap">
       <div class="sec-h">
-        <div class="eyebrow">Características</div>
-        <h2>Todo lo que necesitas, nada que sobre</h2>
+        <div class="eyebrow" data-i18n="feat.eyebrow">Características</div>
+        <h2 data-i18n="feat.h2">Todo lo que necesitas, nada que sobre</h2>
       </div>
       <div class="feat">
-        <div class="card"><span class="ico">📍</span><h3>GPS + foto como prueba</h3><p>Cada visita queda registrada con coordenadas y fotos. Geofence opcional: rechaza check-ins lejos del punto.</p></div>
-        <div class="card"><span class="ico">🤖</span><h3>Bot de Telegram + app web</h3><p>Un bot compartido, cero instalación. O una PWA para quien prefiera el navegador. El trabajador elige.</p></div>
-        <div class="card"><span class="ico">🗺️</span><h3>Panel en vivo</h3><p>Mapa de últimos check-ins, KPIs, ranking de trabajadores y puntos más visitados, claro y oscuro.</p></div>
-        <div class="card"><span class="ico">📊</span><h3>Estadísticas por persona</h3><p>Rendimiento de la empresa y de cada trabajador por periodo, con lo que requiere atención destacado.</p></div>
-        <div class="card"><span class="ico">📥</span><h3>Importación fácil</h3><p>Sube tu Excel/CSV y mapea las columnas. O empuja tu catálogo por API con tu clave privada.</p></div>
-        <div class="card"><span class="ico">🔒</span><h3>Datos aislados por empresa</h3><p>Cada compañía ve solo lo suyo. Multi-empresa desde el primer día, con roles y suscripción.</p></div>
+        <div class="card glass"><span class="ico">📍</span><h3 data-i18n="feat.f1t">GPS + foto como prueba</h3><p data-i18n="feat.f1d">Cada visita queda registrada con coordenadas y fotos. Geofence opcional: rechaza check-ins lejos del punto.</p></div>
+        <div class="card glass"><span class="ico">🤖</span><h3 data-i18n="feat.f2t">Bot de Telegram + app web</h3><p data-i18n="feat.f2d">Un bot compartido, cero instalación. O una PWA para quien prefiera el navegador. El trabajador elige.</p></div>
+        <div class="card glass"><span class="ico">🗺️</span><h3 data-i18n="feat.f3t">Panel en vivo</h3><p data-i18n="feat.f3d">Mapa de últimos check-ins, KPIs, ranking de trabajadores y puntos más visitados, claro y oscuro.</p></div>
+        <div class="card glass"><span class="ico">📊</span><h3 data-i18n="feat.f4t">Estadísticas por persona</h3><p data-i18n="feat.f4d">Rendimiento de la empresa y de cada trabajador por periodo, con lo que requiere atención destacado.</p></div>
+        <div class="card glass"><span class="ico">📥</span><h3 data-i18n="feat.f5t">Importación fácil</h3><p data-i18n="feat.f5d">Sube tu Excel/CSV y mapea las columnas. O empuja tu catálogo por API con tu clave privada.</p></div>
+        <div class="card glass"><span class="ico">🔒</span><h3 data-i18n="feat.f6t">Datos aislados por empresa</h3><p data-i18n="feat.f6d">Cada compañía ve solo lo suyo. Multi-empresa desde el primer día, con roles y suscripción.</p></div>
       </div>
     </div>
   </section>
 
-  <!-- PRECIOS -->
   <section id="precios">
     <div class="wrap">
       <div class="sec-h">
-        <div class="eyebrow">Precios</div>
-        <h2>Empieza gratis, crece cuando quieras</h2>
-        <p>14 días de prueba en cualquier plan. Cancela cuando quieras — tus datos siempre son tuyos.</p>
+        <div class="eyebrow" data-i18n="price.eyebrow">Precios</div>
+        <h2 data-i18n="price.h2">Empieza gratis, crece cuando quieras</h2>
+        <p data-i18n="price.sub">14 días de prueba en cualquier plan. Cancela cuando quieras — tus datos siempre son tuyos.</p>
       </div>
       <div class="prices">
-        <div class="price">
-          <div class="tier">Básico</div>
-          <div class="amt">19€ <span>/ mes</span></div>
-          <p class="who">Para equipos pequeños que empiezan.</p>
-          <ul><li>Hasta 5 trabajadores</li><li>Hasta 200 puntos</li><li>Bot + app web</li><li>Panel y estadísticas</li></ul>
-          <a class="btn ghost" href="/platform/login?tab=new">Empezar</a>
+        <div class="price glass">
+          <div class="tier" data-i18n="price.p1">Básico</div>
+          <div class="amt">19€ <span data-i18n="price.mo">/ mes</span></div>
+          <p class="who" data-i18n="price.p1who">Para equipos pequeños que empiezan.</p>
+          <ul><li data-i18n="price.p1a">Hasta 5 trabajadores</li><li data-i18n="price.p1b">Hasta 200 puntos</li><li data-i18n="price.p1c">Bot + app web</li><li data-i18n="price.p1d">Panel y estadísticas</li></ul>
+          <a class="btn ghost" href="/platform/login?tab=new" data-i18n="price.start">Empezar</a>
         </div>
-        <div class="price hot">
-          <div class="tier">Pro <span class="tag-hot">Popular</span></div>
-          <div class="amt">49€ <span>/ mes</span></div>
-          <p class="who">Para operaciones en crecimiento.</p>
-          <ul><li>Hasta 25 trabajadores</li><li>Hasta 2.000 puntos</li><li>Geofence y export CSV</li><li>API conector</li></ul>
-          <a class="btn primary" href="/platform/login?tab=new">Empezar prueba</a>
+        <div class="price glass hot">
+          <div class="tier">Pro <span class="tag-hot" data-i18n="price.popular">Popular</span></div>
+          <div class="amt">49€ <span data-i18n="price.mo">/ mes</span></div>
+          <p class="who" data-i18n="price.p2who">Para operaciones en crecimiento.</p>
+          <ul><li data-i18n="price.p2a">Hasta 25 trabajadores</li><li data-i18n="price.p2b">Hasta 2.000 puntos</li><li data-i18n="price.p2c">Geofence y export CSV</li><li data-i18n="price.p2d">API conector</li></ul>
+          <a class="btn primary" href="/platform/login?tab=new" data-i18n="price.starttrial">Empezar prueba</a>
         </div>
-        <div class="price">
-          <div class="tier">Business</div>
-          <div class="amt">99€ <span>/ mes</span></div>
-          <p class="who">Para flotas y multi-equipo.</p>
-          <ul><li>Trabajadores ilimitados</li><li>Puntos ilimitados</li><li>Todo lo de Pro</li><li>Soporte prioritario</li></ul>
-          <a class="btn ghost" href="/platform/login?tab=new">Hablar / empezar</a>
+        <div class="price glass">
+          <div class="tier" data-i18n="price.p3">Business</div>
+          <div class="amt">99€ <span data-i18n="price.mo">/ mes</span></div>
+          <p class="who" data-i18n="price.p3who">Para flotas y multi-equipo.</p>
+          <ul><li data-i18n="price.p3a">Trabajadores ilimitados</li><li data-i18n="price.p3b">Puntos ilimitados</li><li data-i18n="price.p3c">Todo lo de Pro</li><li data-i18n="price.p3d">Soporte prioritario</li></ul>
+          <a class="btn ghost" href="/platform/login?tab=new" data-i18n="price.start">Empezar</a>
         </div>
       </div>
     </div>
   </section>
 
-  <!-- CTA FINAL -->
   <section class="final">
     <div class="wrap">
-      <div class="box">
-        <h2>Pon a tu equipo a fichar hoy</h2>
-        <p>Crea tu empresa en un minuto y haz tu primer check-in real.</p>
-        <a class="btn primary" href="/platform/login?tab=new">Crear mi empresa gratis</a>
+      <div class="box glass">
+        <h2 data-i18n="final.h2">Pon a tu equipo a fichar hoy</h2>
+        <p data-i18n="final.p">Crea tu empresa en un minuto y haz tu primer check-in real.</p>
+        <a class="btn primary" href="/platform/login?tab=new" data-i18n="final.cta">Crear mi empresa gratis</a>
       </div>
     </div>
   </section>
 
   <footer>
     <div class="wrap foot">
-      <div class="brand" style="font-size:16px"><span class="mark" style="width:24px;height:24px"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 0c.7 6.3 5.4 11 11.7 11.7C17.4 12.4 12.7 17 12 23.3 11.3 17 6.6 12.4.3 11.7 6.6 11 11.3 6.3 12 0Z"/></svg></span> StarX</div>
-      <div>© 2026 StarX · <a href="/platform/login" style="color:var(--dim)">Iniciar sesión</a> · <a href="/platform/login?tab=new" style="color:var(--dim)">Crear empresa</a></div>
+      <div class="brand" style="font-size:16px"><span class="mark" style="width:24px;height:24px"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 0c.7 6.3 5.4 11 11.7 11.7C17.4 12.4 12.7 17 12 23.3 11.3 17 6.6 12.4.3 11.7 6.6 11 11.3 6.3 12 0Z"/></svg></span> LogiFlow</div>
+      <div><span data-i18n="foot.copy">© 2026 LogiFlow</span> · <a href="/platform/login" style="color:var(--dim)" data-i18n="nav.login">Iniciar sesión</a></div>
     </div>
   </footer>
+
+  <script>
+    var I18N = {
+      es: {
+        "meta.desc":"LogiFlow: check-in para equipos de campo con GPS y foto, desde Telegram o el móvil.",
+        "nav.how":"Cómo funciona","nav.features":"Características","nav.pricing":"Precios","nav.login":"Iniciar sesión","nav.start":"Empezar gratis",
+        "hero.badge":"Check-ins de campo con prueba real","hero.h1a":"Sabe","hero.h1b":"quién fue a dónde","hero.h1c":"cuándo y con foto.",
+        "hero.lead":"LogiFlow es la plataforma de check-in para equipos de campo. Tus trabajadores fichan cada parada con GPS + foto desde Telegram o el móvil, y tú lo ves todo en vivo: mapa, estadísticas y cobertura diaria.",
+        "hero.cta1":"Crear mi empresa gratis","hero.cta2":"Ver cómo funciona","hero.note":"14 días de prueba · sin tarjeta · listo en minutos",
+        "how.eyebrow":"Cómo funciona","how.h2":"De cero a check-ins en 3 pasos","how.sub":"Sin instalar nada. Tus trabajadores usan el chat que ya tienen.",
+        "how.s1t":"Carga tus paradas y tu equipo","how.s1d":"Sube un Excel o conéctalo por API. Asigna cada punto a un trabajador por su teléfono.",
+        "how.s2t":"El trabajador ficha en el sitio","how.s2d":"Abre el bot de Telegram (o la app web), elige su parada y comparte ubicación + foto. Un toque.",
+        "how.s3t":"Tú lo ves todo en vivo","how.s3d":"Panel con mapa, estadísticas por trabajador y punto, y cobertura diaria. Exporta a CSV cuando quieras.",
+        "feat.eyebrow":"Características","feat.h2":"Todo lo que necesitas, nada que sobre",
+        "feat.f1t":"GPS + foto como prueba","feat.f1d":"Cada visita queda registrada con coordenadas y fotos. Geofence opcional: rechaza check-ins lejos del punto.",
+        "feat.f2t":"Bot de Telegram + app web","feat.f2d":"Un bot compartido, cero instalación. O una PWA para quien prefiera el navegador. El trabajador elige.",
+        "feat.f3t":"Panel en vivo","feat.f3d":"Mapa de últimos check-ins, KPIs, ranking de trabajadores y puntos más visitados, claro y oscuro.",
+        "feat.f4t":"Estadísticas por persona","feat.f4d":"Rendimiento de la empresa y de cada trabajador por periodo, con lo que requiere atención destacado.",
+        "feat.f5t":"Importación fácil","feat.f5d":"Sube tu Excel/CSV y mapea las columnas. O empuja tu catálogo por API con tu clave privada.",
+        "feat.f6t":"Datos aislados por empresa","feat.f6d":"Cada compañía ve solo lo suyo. Multi-empresa desde el primer día, con roles y suscripción.",
+        "price.eyebrow":"Precios","price.h2":"Empieza gratis, crece cuando quieras","price.sub":"14 días de prueba en cualquier plan. Cancela cuando quieras — tus datos siempre son tuyos.",
+        "price.mo":"/ mes","price.popular":"Popular","price.start":"Empezar","price.starttrial":"Empezar prueba",
+        "price.p1":"Básico","price.p1who":"Para equipos pequeños que empiezan.","price.p1a":"Hasta 5 trabajadores","price.p1b":"Hasta 200 puntos","price.p1c":"Bot + app web","price.p1d":"Panel y estadísticas",
+        "price.p2who":"Para operaciones en crecimiento.","price.p2a":"Hasta 25 trabajadores","price.p2b":"Hasta 2.000 puntos","price.p2c":"Geofence y export CSV","price.p2d":"API conector",
+        "price.p3":"Business","price.p3who":"Para flotas y multi-equipo.","price.p3a":"Trabajadores ilimitados","price.p3b":"Puntos ilimitados","price.p3c":"Todo lo de Pro","price.p3d":"Soporte prioritario",
+        "final.h2":"Pon a tu equipo a fichar hoy","final.p":"Crea tu empresa en un minuto y haz tu primer check-in real.","final.cta":"Crear mi empresa gratis","foot.copy":"© 2026 LogiFlow"
+      },
+      en: {
+        "meta.desc":"LogiFlow: field-team check-in with GPS and photo, from Telegram or the phone.",
+        "nav.how":"How it works","nav.features":"Features","nav.pricing":"Pricing","nav.login":"Log in","nav.start":"Start free",
+        "hero.badge":"Field check-ins with real proof","hero.h1a":"Know","hero.h1b":"who went where","hero.h1c":"when, and with a photo.",
+        "hero.lead":"LogiFlow is the check-in platform for field teams. Your workers log every stop with GPS + photo from Telegram or their phone, and you see it all live: map, stats and daily coverage.",
+        "hero.cta1":"Create my company free","hero.cta2":"See how it works","hero.note":"14-day trial · no card · ready in minutes",
+        "how.eyebrow":"How it works","how.h2":"From zero to check-ins in 3 steps","how.sub":"Nothing to install. Your workers use the chat they already have.",
+        "how.s1t":"Load your stops and team","how.s1d":"Upload an Excel or connect via API. Assign each point to a worker by phone.",
+        "how.s2t":"The worker checks in on-site","how.s2d":"They open the Telegram bot (or the web app), pick their stop and share location + photo. One tap.",
+        "how.s3t":"You see it all live","how.s3d":"Dashboard with map, per-worker and per-point stats, and daily coverage. Export to CSV anytime.",
+        "feat.eyebrow":"Features","feat.h2":"Everything you need, nothing you don't",
+        "feat.f1t":"GPS + photo as proof","feat.f1d":"Every visit is recorded with coordinates and photos. Optional geofence: reject check-ins far from the point.",
+        "feat.f2t":"Telegram bot + web app","feat.f2d":"One shared bot, zero install. Or a PWA for those who prefer the browser. The worker chooses.",
+        "feat.f3t":"Live dashboard","feat.f3d":"Map of latest check-ins, KPIs, worker leaderboard and most-visited points, light and dark.",
+        "feat.f4t":"Per-person statistics","feat.f4d":"Company and per-worker performance by period, with what needs attention highlighted.",
+        "feat.f5t":"Easy import","feat.f5d":"Upload your Excel/CSV and map the columns. Or push your catalog via API with your private key.",
+        "feat.f6t":"Data isolated per company","feat.f6d":"Each company sees only its own. Multi-company from day one, with roles and subscription.",
+        "price.eyebrow":"Pricing","price.h2":"Start free, grow when you want","price.sub":"14-day trial on any plan. Cancel anytime — your data is always yours.",
+        "price.mo":"/ mo","price.popular":"Popular","price.start":"Start","price.starttrial":"Start trial",
+        "price.p1":"Basic","price.p1who":"For small teams getting started.","price.p1a":"Up to 5 workers","price.p1b":"Up to 200 points","price.p1c":"Bot + web app","price.p1d":"Dashboard & stats",
+        "price.p2who":"For growing operations.","price.p2a":"Up to 25 workers","price.p2b":"Up to 2,000 points","price.p2c":"Geofence & CSV export","price.p2d":"Connector API",
+        "price.p3":"Business","price.p3who":"For fleets and multi-team.","price.p3a":"Unlimited workers","price.p3b":"Unlimited points","price.p3c":"Everything in Pro","price.p3d":"Priority support",
+        "final.h2":"Put your team to work today","final.p":"Create your company in a minute and make your first real check-in.","final.cta":"Create my company free","foot.copy":"© 2026 LogiFlow"
+      },
+      uk: {
+        "meta.desc":"LogiFlow: чек-іни для польових команд з GPS і фото, з Telegram або телефону.",
+        "nav.how":"Як це працює","nav.features":"Можливості","nav.pricing":"Ціни","nav.login":"Увійти","nav.start":"Почати безкоштовно",
+        "hero.badge":"Польові чек-іни з реальним доказом","hero.h1a":"Знай","hero.h1b":"хто, де був","hero.h1c":"коли і з фото.",
+        "hero.lead":"LogiFlow — це платформа чек-інів для польових команд. Ваші працівники фіксують кожну зупинку з GPS + фото через Telegram або телефон, а ви бачите все наживо: карту, статистику й щоденне покриття.",
+        "hero.cta1":"Створити компанію безкоштовно","hero.cta2":"Подивитися, як працює","hero.note":"14 днів пробного періоду · без картки · готово за хвилини",
+        "how.eyebrow":"Як це працює","how.h2":"Від нуля до чек-інів за 3 кроки","how.sub":"Нічого встановлювати не треба. Працівники користуються чатом, який вже мають.",
+        "how.s1t":"Завантажте точки та команду","how.s1d":"Завантажте Excel або підключіть через API. Призначте кожну точку працівнику за номером телефону.",
+        "how.s2t":"Працівник відмічається на місці","how.s2d":"Відкриває Telegram-бот (або вебдодаток), обирає свою точку й ділиться локацією + фото. Один дотик.",
+        "how.s3t":"Ви бачите все наживо","how.s3d":"Панель з картою, статистикою по працівниках і точках та щоденним покриттям. Експорт у CSV будь-коли.",
+        "feat.eyebrow":"Можливості","feat.h2":"Усе потрібне й нічого зайвого",
+        "feat.f1t":"GPS + фото як доказ","feat.f1d":"Кожен візит зберігається з координатами та фото. Опційний геофенс: відхиляє чек-іни далеко від точки.",
+        "feat.f2t":"Telegram-бот + вебдодаток","feat.f2d":"Один спільний бот, нуль встановлення. Або PWA для тих, хто надає перевагу браузеру. Обирає працівник.",
+        "feat.f3t":"Панель наживо","feat.f3d":"Карта останніх чек-інів, KPI, рейтинг працівників і найвідвідуваніші точки, світла й темна.",
+        "feat.f4t":"Статистика по кожному","feat.f4d":"Показники компанії та кожного працівника за період, із виділенням того, що потребує уваги.",
+        "feat.f5t":"Простий імпорт","feat.f5d":"Завантажте Excel/CSV і зіставте стовпці. Або надсилайте каталог через API зі своїм приватним ключем.",
+        "feat.f6t":"Дані ізольовані по компанії","feat.f6d":"Кожна компанія бачить лише своє. Мультикомпанія з першого дня, з ролями та підпискою.",
+        "price.eyebrow":"Ціни","price.h2":"Почніть безкоштовно, зростайте коли схочете","price.sub":"14 днів пробного періоду на будь-якому плані. Скасуйте будь-коли — ваші дані завжди ваші.",
+        "price.mo":"/ міс","price.popular":"Популярний","price.start":"Почати","price.starttrial":"Почати пробний",
+        "price.p1":"Базовий","price.p1who":"Для невеликих команд на старті.","price.p1a":"До 5 працівників","price.p1b":"До 200 точок","price.p1c":"Бот + вебдодаток","price.p1d":"Панель і статистика",
+        "price.p2who":"Для операцій, що зростають.","price.p2a":"До 25 працівників","price.p2b":"До 2 000 точок","price.p2c":"Геофенс і експорт CSV","price.p2d":"API-конектор",
+        "price.p3":"Business","price.p3who":"Для автопарків і мультикоманд.","price.p3a":"Необмежено працівників","price.p3b":"Необмежено точок","price.p3c":"Усе з Pro","price.p3d":"Пріоритетна підтримка",
+        "final.h2":"Запустіть свою команду вже сьогодні","final.p":"Створіть компанію за хвилину й зробіть перший справжній чек-ін.","final.cta":"Створити компанію безкоштовно","foot.copy":"© 2026 LogiFlow"
+      }
+    };
+    function applyLang(lang){
+      var dict = I18N[lang] || I18N.es;
+      document.documentElement.lang = (lang === "uk" ? "uk" : lang);
+      document.querySelectorAll("[data-i18n]").forEach(function(el){
+        var k = el.getAttribute("data-i18n"); if(!(k in dict)) return;
+        if(el.tagName === "META") el.setAttribute("content", dict[k]);
+        else el.textContent = dict[k];
+      });
+      document.querySelectorAll("#lang button").forEach(function(b){ b.classList.toggle("on", b.dataset.lang === lang); });
+      try{ localStorage.setItem("logiflow-lang", lang); }catch(e){}
+    }
+    (function(){
+      var saved; try{ saved = localStorage.getItem("logiflow-lang"); }catch(e){}
+      var nav = (navigator.language||"es").slice(0,2);
+      var lang = saved || (I18N[nav] ? nav : "es");
+      document.getElementById("lang").addEventListener("click", function(e){
+        var b = e.target.closest("button[data-lang]"); if(b) applyLang(b.dataset.lang);
+      });
+      applyLang(lang);
+    })();
+  </script>
 </body>
 </html>

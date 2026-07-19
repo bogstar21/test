@@ -1,6 +1,6 @@
 {
-  "name": "StarX — Check-in Platform",
-  "short_name": "StarX",
+  "name": "LogiFlow — Check-in Platform",
+  "short_name": "LogiFlow",
   "start_url": "/platform",
   "display": "standalone",
   "background_color": "#000000",

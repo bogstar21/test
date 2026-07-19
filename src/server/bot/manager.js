@@ -52,7 +52,7 @@ async function start(token) {
   _bot = bot;
   _username = me.username || "";
   _startedAt = new Date().toISOString();
-  console.log(`🤖 StarX bot started (@${_username}).`);
+  console.log(`🤖 LogiFlow bot started (@${_username}).`);
   return status();
 }
 
@@ -63,7 +63,7 @@ async function stop() {
   _bot = null;
   _username = "";
   _startedAt = null;
-  console.log("🛑 StarX bot stopped.");
+  console.log("🛑 LogiFlow bot stopped.");
   return status();
 }
 

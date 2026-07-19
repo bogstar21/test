@@ -55,7 +55,7 @@ function verifyPassword(tenant, pw) {
 function envDefault() {
   return {
     id: "default",
-    name: process.env.TENANT_NAME || "StarX Demo",
+    name: process.env.TENANT_NAME || "LogiFlow Demo",
     code: String(process.env.TENANT_CODE || "default").toLowerCase(),
     source: process.env.DATASOURCE || "memory",
     sheetId: process.env.SHEET_ID || "",
