@@ -339,6 +339,10 @@ function attachHandlers(bot) {
         const worker = st.worker || await findWorker(userId);
         const src = srcOf(userId);
         if (!src) return bot.sendMessage(msg.chat.id, "⚠️ Sesión caducada. Pulsa /route otra vez.", { reply_markup: removeKb });
+        // A.2 — Photo may be required per company.
+        if (!(st.photos || []).length && String(await src.getSetting("photo_required", "0")) === "1") {
+          return bot.sendMessage(msg.chat.id, "📸 Esta empresa exige al menos una foto. Envía una foto y luego pulsa *✅ Terminar*.", { parse_mode: "Markdown", reply_markup: doneKb });
+        }
         const visitId = await src.addVisit({
           timestamp: new Date().toISOString(),
           workerId: worker ? worker.workerId : "",

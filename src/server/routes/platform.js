@@ -44,9 +44,11 @@ function mountPlatformRoutes(app) {
       const source = forTenant(config.getTenant(req));
       const isAdmin = req.user.role === "admin";
       const pwaEnabled = String(await source.getSetting("pwa_enabled", "0")) === "1";
+      const photoRequired = String(await source.getSetting("photo_required", "0")) === "1";
       const key = await ensureConnectorKey(source, isAdmin);
       res.json({
         pwaEnabled,
+        photoRequired,
         connectorEnabled: !!key || !!(process.env.INTEGRATION_API_KEY || ""),
         connectorKey:     isAdmin ? key : "",
       });
@@ -76,9 +78,13 @@ function mountPlatformRoutes(app) {
       if (typeof (req.body && req.body.pwaEnabled) !== "undefined") {
         await source.setSetting("pwa_enabled", req.body.pwaEnabled ? "1" : "0");
       }
+      if (typeof (req.body && req.body.photoRequired) !== "undefined") {
+        await source.setSetting("photo_required", req.body.photoRequired ? "1" : "0");
+      }
       const pwaEnabled = String(await source.getSetting("pwa_enabled", "0")) === "1";
+      const photoRequired = String(await source.getSetting("photo_required", "0")) === "1";
       const key = String((await source.getSetting(CONNECTOR_KEY_SETTING, "")) || "");
-      res.json({ ok: true, pwaEnabled, connectorEnabled: !!key || !!(process.env.INTEGRATION_API_KEY || "") });
+      res.json({ ok: true, pwaEnabled, photoRequired, connectorEnabled: !!key || !!(process.env.INTEGRATION_API_KEY || "") });
     } catch (e) {
       console.error("/api/settings error:", e && e.message);
       res.status(500).json({ error: (e && e.message) || "server_error" });

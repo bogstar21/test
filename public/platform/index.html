@@ -8,7 +8,7 @@
   <link rel="icon" href="/platform/assets/icon.svg">
   <link rel="manifest" href="/platform/manifest.webmanifest">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-  <link rel="stylesheet" href="/platform/assets/app.css?v=19">
+  <link rel="stylesheet" href="/platform/assets/app.css?v=20">
   <script>
     // Apply theme before first paint. Dark is the default; only an explicit 'light' opts out.
     (function () { try { if (localStorage.getItem('starx-theme') !== 'light') document.documentElement.classList.add('dark'); } catch (e) { document.documentElement.classList.add('dark'); } })();
@@ -240,7 +240,7 @@
         <div id="stats-company">
           <div class="grid grid-2 mt">
             <div class="card chart-card">
-              <p class="ct">🏆 Ranking de trabajadores</p>
+              <p class="ct"><svg class="ic"><use href="#i-users"/></svg> Ranking de trabajadores</p>
               <div class="barlist" id="stats-ranking"><div class="empty">Sin datos</div></div>
             </div>
             <div class="card chart-card">
@@ -258,7 +258,7 @@
               <div class="chart-sm" id="stats-weekday"><div class="empty">Sin datos</div></div>
             </div>
           </div>
-          <div class="section-title">🔔 Requiere atención</div>
+          <div class="section-title"><svg class="ic"><use href="#i-check"/></svg> Requiere atención</div>
           <div class="grid grid-4" id="stats-attn"></div>
         </div>
 
@@ -402,6 +402,18 @@
         </div>
 
         <div class="card card-pad mt">
+          <h3><svg class="ic"><use href="#i-check"/></svg> Reglas de check-in</h3>
+          <p class="desc">Exige una <b>foto</b> en cada check-in (bot y app). Si está activo, no se acepta un check-in sin foto.</p>
+          <div class="deploy-head">
+            <span class="dh-ic"><svg class="ic"><use href="#i-check"/></svg></span>
+            <div><div class="dh-t">Foto obligatoria</div><div class="dh-d" id="photo-status">Comprobando…</div></div>
+          </div>
+          <div class="toolbar">
+            <button class="btn admin-only" id="photo-toggle"><svg class="ic"><use href="#i-power"/></svg> Hacer obligatoria</button>
+          </div>
+        </div>
+
+        <div class="card card-pad mt">
           <h3><svg class="ic"><use href="#i-send"/></svg> Conexión por API (conector)</h3>
           <p class="desc">El cliente empuja su catálogo y lee las visitas por API. Se autentica con la cabecera <code>X-API-Key</code>. Estado: <b id="conn-status">…</b></p>
           <p class="muted" id="conn-hint" style="margin-top:4px"></p>
@@ -508,7 +520,7 @@
   <div class="toast" id="toast"></div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script src="/platform/assets/i18n.js?v=18"></script>
-  <script src="/platform/assets/app.js?v=19"></script>
+  <script src="/platform/assets/i18n.js?v=20"></script>
+  <script src="/platform/assets/app.js?v=20"></script>
 </body>
 </html>

@@ -40,7 +40,16 @@
       "</tr></thead><tbody>" + bodyRows + "</tbody></table></div>";
   }
   function statusPill(on) { return on ? '<span class="pill on">activo</span>' : '<span class="pill off">inactivo</span>'; }
+  function skeleton(n) { var r = ""; for (var i = 0; i < (n || 5); i++) r += '<div class="sk"></div>'; return '<div class="sk-wrap">' + r + "</div>"; }
   function fmtTime(t) { return esc(String(t || "").replace("T", " ").slice(0, 16)); }
+  // Human duration between two ISO timestamps (used by check-out / visit detail).
+  function durationText(startIso, endIso) {
+    var a = Date.parse(startIso), b = Date.parse(endIso);
+    if (!isFinite(a) || !isFinite(b) || b < a) return "—";
+    var min = Math.round((b - a) / 60000);
+    if (min < 60) return min + " min";
+    return Math.floor(min / 60) + " h " + (min % 60) + " min";
+  }
 
   var state = { role: "", isAdmin: false, code: "", points: [], workers: [], visits: [], pointStats: {} };
   // View-level filters (kept between reloads so search/date survive a refresh).
@@ -60,7 +69,11 @@
     $("#modal-title").textContent = title;
     $("#modal-body").innerHTML = html;
     $("#modal").classList.remove("hidden");
-    modalSave = onSave;
+    modalSave = onSave || null;
+    // A read-only modal (no onSave) hides the Save button and relabels Cancel as "Close".
+    var save = $("#modal-save"), cancel = $("#modal-cancel");
+    if (save) save.style.display = modalSave ? "" : "none";
+    if (cancel) cancel.textContent = modalSave ? "Cancelar" : "Cerrar";
     var first = $("#modal-body input, #modal-body select");
     if (first) first.focus();
   }
@@ -112,7 +125,7 @@
       var lat = parseFloat(v.lat), lng = parseFloat(v.lng);
       if (isFinite(lat) && isFinite(lng)) {
         var color = SRC_COLOR[v.source] || SRC_COLOR.bot;
-        var photos = (v.photoCount || 0) > 0 ? "<br>📸 " + v.photoCount : "";
+        var photos = (v.photoCount || 0) > 0 ? "<br>" + v.photoCount : "";
         markers.addLayer(L.circleMarker([lat, lng], {
           radius: 7, color: color, weight: 2, fillColor: color, fillOpacity: 0.55,
         }).bindPopup(
@@ -383,6 +396,7 @@
   }
 
   async function loadPoints() {
+    $("#points-wrap").innerHTML = skeleton();
     try {
       var data = await api("/api/points");
       state.points = data.points;
@@ -523,6 +537,7 @@
 
   async function loadWorkers() {
     var wrap = $("#workers-wrap");
+    wrap.innerHTML = skeleton();
     loadPendingContacts();
     try {
       var data = await api("/api/workers");
@@ -580,6 +595,7 @@
 
   async function loadVisits() {
     var wrap = $("#visits-wrap");
+    wrap.innerHTML = skeleton();
     try {
       var data = await api("/api/visits?limit=5000");
       state.visits = data.visits || [];
@@ -591,11 +607,35 @@
     var wrap = $("#visits-wrap");
     var rows = filteredVisits();
     if (!rows.length) { wrap.innerHTML = '<div class="card card-pad"><div class="empty">Ningún check-in coincide con el filtro.</div></div>'; return; }
-    wrap.innerHTML = tableWrap(["Hora", "Trabajador", "Punto", "Ubicación", "Fotos", "Nota"], rows.map(function (v) {
+    wrap.innerHTML = tableWrap(["Hora", "Trabajador", "Punto", "Ubicación", "Fotos", "Nota", ""], rows.map(function (v) {
       return '<tr><td data-label="Hora">' + fmtTime(v.timestamp) + '</td><td data-label="Trabajador">' + esc(v.workerName || v.workerTelegramId) + '</td><td data-label="Punto">' + esc(v.pointName || v.pointId) + '</td><td data-label="Ubicación">' +
-        (v.mapsLink ? '<a href="' + esc(v.mapsLink) + '" target="_blank" rel="noopener">mapa ↗</a>' : '<span class="muted">—</span>') +
-        '</td><td data-label="Fotos">' + photoCell(v) + '</td><td data-label="Nota" class="muted">' + esc(v.note || "") + "</td></tr>";
+        (v.mapsLink ? '<a href="' + esc(v.mapsLink) + '" target="_blank" rel="noopener">mapa</a>' : '<span class="muted">—</span>') +
+        '</td><td data-label="Fotos">' + photoCell(v) + '</td><td data-label="Nota" class="muted">' + esc(v.note || "") +
+        '</td><td data-label=""><button class="btn ghost sm" data-visit-detail="' + esc(v.visitId) + '">Ver</button></td></tr>';
     }).join(""), true);
+  }
+
+  // A.4 — Visit detail: full record (time, worker, point, source, location, note, photos).
+  function openVisitDetail(visitId) {
+    var v = (state.visits || []).filter(function (x) { return String(x.visitId) === String(visitId); })[0];
+    if (!v) return;
+    var n = v.photoCount || 0, photos = "";
+    for (var i = 0; i < n; i++) {
+      var src = "/api/visits/" + encodeURIComponent(v.visitId) + "/photo/" + i;
+      photos += '<img class="thumb" src="' + src + '" alt="foto" data-full="' + src + '" loading="lazy">';
+    }
+    var dur = v.checkoutAt ? durationText(v.timestamp, v.checkoutAt) : "";
+    function row(label, val) { return '<div class="vd-row"><span class="vd-k">' + label + '</span><span class="vd-v">' + val + '</span></div>'; }
+    var html =
+      row("Hora", fmtTime(v.timestamp)) +
+      (v.checkoutAt ? row("Salida", fmtTime(v.checkoutAt)) + row("Duración", dur) : "") +
+      row("Trabajador", esc(v.workerName || v.workerTelegramId || "—")) +
+      row("Punto", esc(v.pointName || v.pointId || "—")) +
+      row("Fuente", v.source === "pwa" ? "App (PWA)" : "Bot de Telegram") +
+      row("Ubicación", v.mapsLink ? '<a href="' + esc(v.mapsLink) + '" target="_blank" rel="noopener">' + esc(v.lat) + ", " + esc(v.lng) + ' — mapa</a>' : '<span class="muted">—</span>') +
+      row("Nota", v.note ? esc(v.note) : '<span class="muted">—</span>') +
+      '<div class="vd-photos">' + (photos || '<span class="muted">Sin fotos</span>') + '</div>';
+    openModal("Detalle del check-in", html, null);
   }
 
   // Export visits to CSV, generated entirely client-side (no extra endpoint).
@@ -763,7 +803,7 @@
     var entries = Object.keys(obj).map(function (k) { return [k, obj[k]]; })
       .sort(function (a, b) { return b[1] - a[1]; }).slice(0, 10);
     if (!entries.length) { el.innerHTML = '<div class="empty">Sin check-ins en este periodo</div>'; return; }
-    var medals = ["🥇", "🥈", "🥉"];
+    var medals = ["1.", "2.", "3."];
     var max = entries[0][1] || 1;
     el.innerHTML = entries.map(function (e, i) {
       var pct = Math.max(4, Math.round((e[1] / max) * 100));
@@ -846,7 +886,7 @@
     function names(arr, key) { return arr.slice(0, 4).map(function (i) { return esc(i[key] || i.id || ""); }).join(", ") + (arr.length > 4 ? "…" : ""); }
     function card(color, num, label, hint) {
       return '<div class="card attn ' + color + '"><div class="attn-num">' + num + '</div><div class="attn-lbl">' + label + '</div>' +
-        (num ? '<div class="attn-hint">' + hint + '</div>' : '<div class="attn-hint ok">✓ todo en orden</div>') + '</div>';
+        (num ? '<div class="attn-hint">' + hint + '</div>' : '<div class="attn-hint ok">Todo en orden</div>') + '</div>';
     }
     box.innerHTML =
       card("rose",   unvisited.length,    "puntos sin visitar en el periodo", names(unvisited, "name")) +
@@ -880,7 +920,7 @@
       cov.innerHTML = assigned.map(function (p) {
         var n = visitedIds[String(p.id)] || 0;
         var pct = Math.max(4, Math.round((n / max) * 100));
-        return '<div class="bl-row"><span class="bl-name">' + (n ? "✅" : "⚠️") + " " + esc(p.name || p.address || p.id) + '</span>' +
+        return '<div class="bl-row"><span class="bl-name">' + esc(p.name || p.address || p.id) + '</span>' +
           '<span class="bl-track"><span class="bl-fill" style="width:' + (n ? pct : 0) + '%"></span></span>' +
           '<span class="bl-val">' + n + "</span></div>";
       }).join("");
@@ -938,7 +978,7 @@
     pill.textContent = on ? "en línea" : "apagado";
     if (on) {
       var uname = s.username ? ("@" + esc(s.username)) : "el bot";
-      var link = s.username ? ' — <a href="https://t.me/' + esc(s.username) + '" target="_blank" rel="noopener">abrir ' + uname + " ↗</a>" : "";
+      var link = s.username ? ' — <a href="https://t.me/' + esc(s.username) + '" target="_blank" rel="noopener">abrir ' + uname + "</a>" : "";
       $("#bot-status").innerHTML = "El bot <b>" + uname + "</b> está en línea recibiendo check-ins." + link;
     } else if (!configured) {
       $("#bot-status").textContent = "El bot aún no está configurado en el servidor (falta TELEGRAM_TOKEN).";
@@ -1113,6 +1153,15 @@
     var pt = $("#pwa-toggle");
     if (pt) pt.innerHTML = '<svg class="ic"><use href="#i-power"/></svg> ' + (pwaOn ? "Desactivar PWA" : "Activar PWA");
 
+    // A.2 — photo-required toggle
+    var photoOn = !!(s && s.photoRequired);
+    var phs = $("#photo-status");
+    if (phs) phs.innerHTML = photoOn
+      ? '<span class="dot dot-ok"></span> Obligatoria — no se acepta un check-in sin foto.'
+      : '<span class="dot dot-muted"></span> Opcional — el trabajador puede fichar sin foto.';
+    var pht = $("#photo-toggle");
+    if (pht) pht.innerHTML = '<svg class="ic"><use href="#i-power"/></svg> ' + (photoOn ? "Hacer opcional" : "Hacer obligatoria");
+
     var connOn = !!(s && s.connectorEnabled);
     var key = (s && s.connectorKey) || "";
     var cs = $("#conn-status");
@@ -1214,6 +1263,16 @@
     } catch (e) { toast(e.message, true); }
     finally { btn.disabled = false; }
   }
+  async function togglePhoto() {
+    var btn = $("#photo-toggle"); btn.disabled = true;
+    try {
+      var cur = await api("/api/settings");
+      var next = await api("/api/settings", { method: "POST", body: JSON.stringify({ photoRequired: !cur.photoRequired }) });
+      renderSettings(next);
+      toast(next.photoRequired ? "Foto obligatoria activada" : "Foto ahora opcional");
+    } catch (e) { toast(e.message, true); }
+    finally { btn.disabled = false; }
+  }
 
   // ── Wire up ──────────────────────────────────────────────────────────────────
   function applyAdmin() { $$(".admin-only").forEach(function (el) { el.classList.toggle("hidden", !state.isAdmin); }); }
@@ -1261,6 +1320,7 @@
       var t = e.target;
       var cp = t.closest("[data-check-point]"); if (cp) { selectedPoints[cp.dataset.checkPoint] = cp.checked; updateBulkbar(); return; }
       var th = t.closest(".thumb");             if (th) return openLightbox(th.dataset.full);
+      var vd = t.closest("[data-visit-detail]"); if (vd) return openVisitDetail(vd.dataset.visitDetail);
       var ep = t.closest("[data-edit-point]");  if (ep) return editPoint(+ep.dataset.editPoint);
       var dp = t.closest("[data-del-point]");   if (dp) return delPoint(+dp.dataset.delPoint);
       var ew = t.closest("[data-edit-worker]"); if (ew) return editWorker(+ew.dataset.editWorker);
@@ -1374,6 +1434,7 @@
 
     // Settings (PWA toggle + connector key)
     var pwaBtn = $("#pwa-toggle"); if (pwaBtn) pwaBtn.onclick = togglePwa;
+    var photoBtn = $("#photo-toggle"); if (photoBtn) photoBtn.onclick = togglePhoto;
     var genBtn = $("#conn-key-gen"); if (genBtn) genBtn.onclick = generateConnectorKey;
     var cpyBtn = $("#conn-key-copy"); if (cpyBtn) cpyBtn.onclick = copyConnectorKey;
 

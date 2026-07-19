@@ -80,6 +80,11 @@ function mountCheckinRoutes(app) {
         });
       }
 
+      // A.2 — Photo may be required per company (photo_required setting).
+      if (!b.photo && String(await source.getSetting("photo_required", "0")) === "1") {
+        return res.status(422).json({ error: "photo_required", detail: "Esta empresa exige una foto para el check-in. Añade una e inténtalo de nuevo." });
+      }
+
       // Optional photo → datasource photo store (Supabase Storage / in-memory).
       const photoFileIds = [];
       if (b.photo) {
