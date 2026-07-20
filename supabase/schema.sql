@@ -27,6 +27,9 @@ create table if not exists public.starx_tenants (
   source              text default 'supabase',
   sheet_id            text default '',
   password_hash       text default '',             -- scrypt$salt$hash (never plaintext)
+  email               text default '',             -- account owner's email (recovery + contact)
+  reset_token_hash    text default '',             -- sha256(token) for an in-flight password reset
+  reset_token_expires timestamptz,                 -- reset link dies after this
   plan                text default 'trial',        -- trial | basic | pro | business
   subscription_status text default 'trialing',     -- trialing | active | past_due | canceled
   trial_ends_at       timestamptz,
@@ -34,7 +37,11 @@ create table if not exists public.starx_tenants (
   active              boolean default true,
   created_at          timestamptz default now()
 );
+alter table public.starx_tenants add column if not exists email               text default '';
+alter table public.starx_tenants add column if not exists reset_token_hash    text default '';
+alter table public.starx_tenants add column if not exists reset_token_expires timestamptz;
 create index if not exists idx_starx_tenants_code on public.starx_tenants (code);
+create index if not exists idx_starx_tenants_email on public.starx_tenants (email);
 
 -- ── Workers ────────────────────────────────────────────────────────────────────
 create table if not exists public.starx_workers (

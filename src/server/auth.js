@@ -256,19 +256,79 @@ function mountAuthRoutes(app) {
   });
 
   // Self-service company signup: create a tenant on a 14-day trial and log the owner in.
+  // Requires an email (account recovery + contact — see /auth/forgot) and explicit
+  // acceptance of the Terms/Privacy Policy before any data is collected.
+  const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   app.post("/auth/signup", async (req, res) => {
     const name = String((req.body && req.body.company) || "").trim();
     const password = String((req.body && req.body.password) || "");
+    const email = String((req.body && req.body.email) || "").trim().toLowerCase();
+    const acceptedTerms = !!(req.body && req.body.acceptedTerms);
     if (!name || password.length < 6) {
       return res.status(400).json({ error: "bad_input", detail: "Indica el nombre de la empresa y una contraseña de al menos 6 caracteres." });
     }
+    if (!email || !EMAIL_RE.test(email)) {
+      return res.status(400).json({ error: "bad_email", detail: "Indica un correo electrónico válido — lo necesitas para recuperar tu cuenta." });
+    }
+    if (!acceptedTerms) {
+      return res.status(400).json({ error: "terms_required", detail: "Debes aceptar los Términos de Servicio y la Política de Privacidad." });
+    }
+    if (config.tenants.byEmail(email)) {
+      return res.status(409).json({ error: "email_taken", detail: "Ya existe una empresa registrada con ese correo." });
+    }
     try {
-      const tenant = await config.tenants.create({ name, password, plan: "trial", trialDays: 14 });
+      const tenant = await config.tenants.create({ name, password, email, plan: "trial", trialDays: 14 });
       setSessionCookie(res, { email: "admin", name: "Admin", role: "admin", tenantId: tenant.id, company: tenant.name });
+      require("./email").sendWelcome(email, tenant.name, tenant.code).catch(e => console.error("welcome email:", e && e.message));
       res.json({ ok: true, code: tenant.code, company: tenant.name });
     } catch (e) {
       console.error("/auth/signup error:", e && e.message);
       res.status(500).json({ error: "server_error", detail: e && e.message });
+    }
+  });
+
+  // Forgot password: email a one-time reset link. Always responds the same way whether
+  // or not the email matches an account, so this can't be used to enumerate customers.
+  app.post("/auth/forgot", async (req, res) => {
+    const email = String((req.body && req.body.email) || "").trim().toLowerCase();
+    const generic = { ok: true, detail: "Si ese correo existe en nuestro sistema, te hemos enviado un enlace para restablecer la contraseña." };
+    if (!email || !EMAIL_RE.test(email)) return res.json(generic);
+    try {
+      const tenant = config.tenants.byEmail(email);
+      if (tenant && !tenant.isDefault) {
+        const token = crypto.randomBytes(32).toString("hex");
+        const tokenHash = crypto.createHash("sha256").update(token).digest("hex");
+        const expires = new Date(Date.now() + 60 * 60 * 1000).toISOString(); // 1 hour
+        await config.tenants.update(tenant.id, { resetTokenHash: tokenHash, resetTokenExpires: expires });
+        const base = (config.PLATFORM_URL || (req.protocol + "://" + req.get("host"))).replace(/\/+$/, "");
+        const resetUrl = `${base}/platform/reset?token=${token}`;
+        require("./email").sendPasswordReset(email, resetUrl).catch(e => console.error("reset email:", e && e.message));
+      }
+      res.json(generic);
+    } catch (e) {
+      console.error("/auth/forgot error:", e && e.message);
+      res.json(generic); // never leak server errors here either
+    }
+  });
+
+  // Complete a password reset: the raw token from the emailed link must hash-match a
+  // tenant's stored (unexpired) reset_token_hash. Single-use — cleared on success.
+  app.post("/auth/reset", async (req, res) => {
+    const token = String((req.body && req.body.token) || "");
+    const password = String((req.body && req.body.password) || "");
+    if (!token) return res.status(400).json({ error: "no_token" });
+    if (password.length < 6) return res.status(400).json({ error: "weak_password", detail: "La nueva contraseña debe tener al menos 6 caracteres." });
+    try {
+      const tokenHash = crypto.createHash("sha256").update(token).digest("hex");
+      const tenant = config.allTenants().find(t => t.resetTokenHash && safeEqual(t.resetTokenHash, tokenHash));
+      if (!tenant || !tenant.resetTokenExpires || Date.now() > Date.parse(tenant.resetTokenExpires)) {
+        return res.status(400).json({ error: "invalid_or_expired", detail: "El enlace no es válido o ha caducado. Pide uno nuevo." });
+      }
+      await config.tenants.update(tenant.id, { passwordHash: config.tenants.hashPassword(password), resetTokenHash: "", resetTokenExpires: null });
+      res.json({ ok: true });
+    } catch (e) {
+      console.error("/auth/reset error:", e && e.message);
+      res.status(500).json({ error: "server_error" });
     }
   });
 

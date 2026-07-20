@@ -13,6 +13,9 @@ function mountPlatformRoutes(app) {
   app.get("/platform/login", (_req, res) =>
     res.sendFile(path.join(config.PUBLIC_DIR, "platform", "login.html")));
 
+  app.get("/platform/reset", (_req, res) =>
+    res.sendFile(path.join(config.PUBLIC_DIR, "platform", "reset.html")));
+
   app.get("/platform", requireAuth, (_req, res) =>
     res.sendFile(path.join(config.PUBLIC_DIR, "platform", "index.html")));
 
@@ -122,6 +125,27 @@ function mountPlatformRoutes(app) {
       res.json({ ok: true });
     } catch (e) {
       console.error("/api/account/password error:", e && e.message);
+      res.status(500).json({ error: (e && e.message) || "server_error" });
+    }
+  });
+
+  // Full data export: every point, worker, and visit the company owns, as one JSON file.
+  // Lets a company leave (or just back up) without being held hostage to the platform —
+  // same data an admin can already see in the UI, just all of it in one download.
+  r.get("/export", requireRole("admin"), async (req, res) => {
+    try {
+      const tenant = config.getTenant(req);
+      const source = forTenant(tenant);
+      const [points, workers, visits] = await Promise.all([
+        source.listPoints(), source.listWorkers(), source.listVisits({ limit: 100000 }),
+      ]);
+      const out = { exportedAt: new Date().toISOString(), company: tenant.name, points, workers, visits };
+      const filename = `starx-export-${tenant.code || tenant.id}-${new Date().toISOString().slice(0, 10)}.json`;
+      res.set("Content-Type", "application/json");
+      res.set("Content-Disposition", `attachment; filename="${filename}"`);
+      res.send(JSON.stringify(out, null, 2));
+    } catch (e) {
+      console.error("/api/export error:", e && e.message);
       res.status(500).json({ error: (e && e.message) || "server_error" });
     }
   });

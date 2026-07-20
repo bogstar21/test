@@ -80,6 +80,11 @@ function byCode(code) {
   if (!code) return null;
   return _cache.find(t => String(t.code || "").toLowerCase() === code) || null;
 }
+function byEmail(email) {
+  email = String(email || "").trim().toLowerCase();
+  if (!email) return null;
+  return _cache.find(t => String(t.email || "").toLowerCase() === email) || null;
+}
 // Resolve the tenant for a request from its session (falls back to default).
 function get(req) {
   const id = req && req.user && req.user.tenantId;
@@ -96,6 +101,9 @@ function rowToTenant(r) {
     id: String(r.id), name: String(r.name || ""), code: String(r.code || "").toLowerCase(),
     source: String(r.source || "supabase"), sheetId: String(r.sheet_id || ""),
     passwordHash: String(r.password_hash || ""),
+    email: String(r.email || ""),
+    resetTokenHash: String(r.reset_token_hash || ""),
+    resetTokenExpires: r.reset_token_expires || null,
     plan: String(r.plan || "trial"),
     subscriptionStatus: String(r.subscription_status || "trialing"),
     trialEndsAt: r.trial_ends_at || null,
@@ -136,6 +144,7 @@ async function create(opts) {
     id, name: String(opts.name || "Nueva empresa"), code,
     source: opts.source || (platformDb() ? "supabase" : "memory"), sheetId: "",
     passwordHash: opts.password ? hashPassword(opts.password) : "",
+    email: String(opts.email || "").trim().toLowerCase(),
     plan: opts.plan || "trial",
     subscriptionStatus: "trialing", trialEndsAt, stripeCustomerId: "", active: true,
   };
@@ -143,7 +152,7 @@ async function create(opts) {
   if (db) {
     const { error } = await db.from("starx_tenants").insert({
       id: tenant.id, name: tenant.name, code: tenant.code, source: tenant.source,
-      password_hash: tenant.passwordHash, plan: tenant.plan,
+      password_hash: tenant.passwordHash, email: tenant.email, plan: tenant.plan,
       subscription_status: tenant.subscriptionStatus, trial_ends_at: tenant.trialEndsAt, active: true,
     });
     if (error) throw new Error(error.message || String(error));
@@ -164,6 +173,9 @@ async function update(id, patch) {
     if (patch.stripeCustomerId != null) dbPatch.stripe_customer_id = patch.stripeCustomerId;
     if (patch.trialEndsAt !== undefined) dbPatch.trial_ends_at = patch.trialEndsAt;
     if (patch.passwordHash != null) dbPatch.password_hash = patch.passwordHash;
+    if (patch.email != null) dbPatch.email = patch.email;
+    if (patch.resetTokenHash != null) dbPatch.reset_token_hash = patch.resetTokenHash;
+    if (patch.resetTokenExpires !== undefined) dbPatch.reset_token_expires = patch.resetTokenExpires;
     if (Object.keys(dbPatch).length) {
       const { error } = await db.from("starx_tenants").update(dbPatch).eq("id", id);
       if (error) throw new Error(error.message || String(error));
@@ -178,5 +190,5 @@ async function update(id, patch) {
 
 module.exports = {
   PLANS, planLimits, canWrite, hashPassword, verifyPassword,
-  all, defaultTenant, byId, byCode, get, reload, create, update, slugify, envDefault,
+  all, defaultTenant, byId, byCode, byEmail, get, reload, create, update, slugify, envDefault,
 };

@@ -7,6 +7,7 @@ const cookieParser = require("cookie-parser");
 const helmet       = require("helmet");
 const rateLimit    = require("express-rate-limit");
 const config       = require("./config");
+const logger       = require("./logger");
 const { mountAuthRoutes, attachUser } = require("./auth");
 const { mountPublicRoutes }   = require("./routes/public");
 const { mountPlatformRoutes } = require("./routes/platform");
@@ -101,8 +102,24 @@ function createApp(deps = {}) {
   mountPublicRoutes(app, deps); // /health, /
 
   app.use((_req, res) => res.status(404).type("text/plain").send("Not found"));
+
+  // Catch-all error handler (4-arg signature is how Express recognises it). Anything a
+  // route forgot to try/catch lands here instead of crashing the process or leaking a
+  // stack trace to the client.
+  app.use((err, req, res, _next) => {
+    logger.error("unhandled request error", err, { method: req.method, path: req.path });
+    if (res.headersSent) return;
+    res.status(500).json({ error: "server_error" });
+  });
+
   return app;
 }
+
+// Last line of defense: log (and optionally alert) instead of a silent crash / restart
+// loop with no trace of what happened. Node still exits after an uncaughtException per
+// its own semantics — we just make sure it's logged first.
+process.on("uncaughtException", err => { logger.error("uncaughtException", err); });
+process.on("unhandledRejection", reason => { logger.error("unhandledRejection", reason instanceof Error ? reason : new Error(String(reason))); });
 
 function startServer(deps = {}) {
   const app = createApp(deps);

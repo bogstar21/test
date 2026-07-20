@@ -8,7 +8,7 @@
   <link rel="icon" href="/platform/assets/icon.svg">
   <link rel="manifest" href="/platform/manifest.webmanifest">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-  <link rel="stylesheet" href="/platform/assets/app.css?v=23">
+  <link rel="stylesheet" href="/platform/assets/app.css?v=24">
   <script>
     // Apply theme before first paint. Light (warm paper) is the default; only an explicit 'dark' opts in.
     (function () { try { if (localStorage.getItem('starx-theme') === 'dark') document.documentElement.classList.add('dark'); } catch (e) {} })();
@@ -42,14 +42,14 @@
   <header class="topbar">
     <div class="top-left">
       <button class="btn ghost sm icon" id="nav-toggle" type="button" aria-label="Abrir menú"><svg class="ic"><use href="#i-menu"/></svg></button>
-      <span class="brand-row">
+      <span class="brand-row" id="brand-home" role="button" tabindex="0" aria-label="Ir al panel" title="Ir al panel">
         <span class="mark"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" stroke-linecap="round"><path d="M8.5 3 15.5 6.5V13.5L8.5 17 1.5 13.5V6.5Z"/><path d="M1.5 6.5 8.5 10 15.5 6.5"/><path d="M8.5 10V17"/></g><path d="M12 8.5H18V6l4.5 4-4.5 4v-2.5H12Z"/></svg></span>
         <span class="brand">StarX</span>
         <span class="meta" id="company">…</span>
       </span>
     </div>
     <div class="top-right">
-      <span class="badge" id="bot-badge"><span class="dot dot-muted"></span> Bot</span>
+      <span class="badge" id="bot-badge"><span class="dot dot-muted"></span><span class="badge-txt"> Bot</span></span>
       <span class="user" id="user">…</span>
       <div class="langsw" id="lang-switch">
         <button data-lang-btn="en" type="button">EN</button>
@@ -74,8 +74,7 @@
       <button class="nav" data-view="visits"><svg class="ic"><use href="#i-check"/></svg> Visitas</button>
       <button class="nav" data-view="stats"><svg class="ic"><use href="#i-chart"/></svg> Estadísticas</button>
       <div class="nav-label" style="margin-top:8px">Herramientas</div>
-      <button class="nav" data-view="bot"><svg class="ic"><use href="#i-send"/></svg> Bot de Telegram</button>
-      <button class="nav" data-view="import"><svg class="ic"><use href="#i-import"/></svg> Importar y configurar</button>
+      <button class="nav" data-view="import"><svg class="ic"><use href="#i-send"/></svg> Conexiones</button>
       <button class="nav" data-view="settings"><svg class="ic"><use href="#i-settings"/></svg> Ajustes</button>
       <div class="side-foot">StarX · MVP<br>Check-ins de campo con GPS y fotos.</div>
     </nav>
@@ -282,48 +281,10 @@
       </section>
 
       <!-- ══════════════════ BOT ══════════════════ -->
-      <section class="view" id="view-bot">
-        <div class="view-head">
-          <div><h1 class="h1">Bot de Telegram</h1><p class="lead">Tus trabajadores hacen check-in desde el chat que ya usan. Cero instalación.</p></div>
-          <div class="toolbar"><span class="pill off" id="bot-pill">…</span></div>
-        </div>
-
-        <div class="card card-pad">
-          <div class="deploy-head">
-            <span class="dh-ic"><svg class="ic"><use href="#i-send"/></svg></span>
-            <div><div class="dh-t">Estado del bot</div><div class="dh-d" id="bot-status">Comprobando…</div></div>
-          </div>
-          <div class="toolbar">
-            <button class="btn admin-only" id="bot-start"><svg class="ic"><use href="#i-power"/></svg> Encender bot</button>
-            <button class="btn danger admin-only hidden" id="bot-stop"><svg class="ic"><use href="#i-power"/></svg> Apagar bot</button>
-          </div>
-        </div>
-
-        <div class="card card-pad mt">
-          <h3><svg class="ic"><use href="#i-check"/></svg> Cómo registran tus trabajadores</h3>
-          <p class="desc">StarX usa <b>un único bot compartido</b>, ya configurado por la plataforma. Tú solo lo enciendes o apagas aquí — no hay tokens que gestionar.</p>
-          <ol class="muted" style="margin:8px 0 0; padding-left:20px; line-height:1.9">
-            <li>Carga a tus trabajadores con su <b>teléfono</b> (en <b>Trabajadores</b> o por importación/API).</li>
-            <li>El trabajador abre el bot y pulsa <code>/start</code> (o usa el enlace de abajo).</li>
-            <li>Comparte su número de teléfono y queda enlazado a <b>tu empresa</b> automáticamente.</li>
-            <li>Pulsa <code>/route</code>, elige una parada y hace su check-in con ubicación y foto.</li>
-          </ol>
-          <div class="field" style="margin-top:14px">
-            <label>Enlace de alta para tus trabajadores</label>
-            <div class="key-row">
-              <input id="bot-invite" type="text" readonly placeholder="Se genera al conectar el bot…">
-              <button class="btn ghost sm" id="bot-invite-copy" type="button">Copiar</button>
-            </div>
-            <p class="muted" style="margin-top:6px">Compártelo por WhatsApp/Telegram. Quien lo abra se registrará en <b>tu empresa</b> (código <b id="bot-code">…</b>).</p>
-          </div>
-          <p class="muted" style="margin-top:12px">Si el botón <b>Encender bot</b> aparece deshabilitado, el operador de la plataforma aún no ha configurado el token del bot en el servidor.</p>
-        </div>
-      </section>
-
-      <!-- ══════════════════ IMPORTAR Y CONFIGURAR ══════════════════ -->
+      <!-- ══════════════════ CONEXIONES (API + Excel/CSV + Google Sheets) ══════════════════ -->
       <section class="view" id="view-import">
         <div class="view-head">
-          <div><h1 class="h1">Importar y configurar</h1><p class="lead">Trae tus datos: sube puntos o trabajadores desde Excel/CSV.</p></div>
+          <div><h1 class="h1">Conexiones</h1><p class="lead">Cómo entran y salen tus datos: sube un Excel/CSV, o conecta tu propio sistema por API.</p></div>
         </div>
 
         <div class="card card-pad">
@@ -381,77 +342,9 @@
           </div>
         </div>
 
-      </section>
-
-      <!-- ══════════════════ AJUSTES ══════════════════ -->
-      <section class="view" id="view-settings">
-        <div class="view-head">
-          <div><h1 class="h1">Ajustes</h1><p class="lead">Tu cuenta, el bot, y cómo StarX se conecta con el resto de tu sistema.</p></div>
-        </div>
-
-        <!-- Guía de bienvenida (reabre el asistente paso a paso) -->
-        <div class="card card-pad">
-          <h3><svg class="ic"><use href="#i-check"/></svg> Guía de bienvenida</h3>
-          <p class="desc">Repasa los primeros pasos para dejar StarX listo: importar datos, añadir trabajadores y activar el check-in.</p>
-          <button class="btn ghost admin-only" id="settings-onboard-btn"><svg class="ic"><use href="#i-refresh"/></svg> Ver guía de bienvenida</button>
-        </div>
-
-        <!-- Cuenta: empresa + cambio de contraseña -->
-        <div class="card card-pad mt" id="acct-card">
-          <h3><svg class="ic"><use href="#i-users"/></svg> Cuenta</h3>
-          <p class="desc">Empresa: <b id="acct-company">…</b></p>
-          <div id="acct-pw-wrap">
-            <div class="row2">
-              <div class="field"><label>Contraseña actual</label><input type="password" id="acct-cur" autocomplete="current-password"></div>
-              <div class="field"><label>Nueva contraseña</label><input type="password" id="acct-new" autocomplete="new-password" placeholder="mínimo 6 caracteres"></div>
-            </div>
-            <div class="field"><label>Repite la nueva contraseña</label><input type="password" id="acct-new2" autocomplete="new-password"></div>
-            <button class="btn admin-only" id="acct-pw-save"><svg class="ic"><use href="#i-check"/></svg> Cambiar contraseña</button>
-          </div>
-          <p class="muted hidden" id="acct-pw-locked">La contraseña de esta instalación se define con la variable <code>PLATFORM_PASSWORD</code> del servidor.</p>
-        </div>
-
-        <!-- Bot de Telegram (resumen — el control completo sigue en su propia pestaña) -->
+        <!-- Conexión por API (conector) -->
         <div class="card card-pad mt">
-          <h3><svg class="ic"><use href="#i-send"/></svg> Bot de Telegram</h3>
-          <div class="deploy-head">
-            <span class="dh-ic"><svg class="ic"><use href="#i-send"/></svg></span>
-            <div><div class="dh-t">Estado <span id="set-bot-pill" class="pill off">…</span></div><div class="dh-d" id="set-bot-status">Comprobando…</div></div>
-          </div>
-          <div class="toolbar">
-            <button class="btn ghost" id="set-bot-goto">Configurar bot →</button>
-          </div>
-        </div>
-
-        <!-- App de check-in (PWA) -->
-        <div class="card card-pad mt">
-          <h3><svg class="ic"><use href="#i-globe"/></svg> App de check-in (PWA)</h3>
-          <p class="desc">Permite que tus trabajadores hagan check-in desde el navegador (además del bot). Entran en la pantalla de login con su <b>teléfono</b> (el mismo que cargaste).</p>
-          <div class="deploy-head">
-            <span class="dh-ic"><svg class="ic"><use href="#i-globe"/></svg></span>
-            <div><div class="dh-t">Estado</div><div class="dh-d" id="pwa-status">Comprobando…</div></div>
-          </div>
-          <div class="toolbar">
-            <button class="btn admin-only" id="pwa-toggle"><svg class="ic"><use href="#i-power"/></svg> Activar PWA</button>
-          </div>
-        </div>
-
-        <!-- Reglas de check-in -->
-        <div class="card card-pad mt">
-          <h3><svg class="ic"><use href="#i-check"/></svg> Reglas de check-in</h3>
-          <p class="desc">Exige una <b>foto</b> en cada check-in (bot y app). Si está activo, no se acepta un check-in sin foto.</p>
-          <div class="deploy-head">
-            <span class="dh-ic"><svg class="ic"><use href="#i-check"/></svg></span>
-            <div><div class="dh-t">Foto obligatoria</div><div class="dh-d" id="photo-status">Comprobando…</div></div>
-          </div>
-          <div class="toolbar">
-            <button class="btn admin-only" id="photo-toggle"><svg class="ic"><use href="#i-power"/></svg> Hacer obligatoria</button>
-          </div>
-        </div>
-
-        <!-- Conexiones: API + otras integraciones -->
-        <div class="card card-pad mt">
-          <h3><svg class="ic"><use href="#i-send"/></svg> Conexiones</h3>
+          <h3><svg class="ic"><use href="#i-send"/></svg> Conexión por API (conector)</h3>
           <p class="desc">El cliente empuja su catálogo y lee las visitas por API. Se autentica con la cabecera <code>X-API-Key</code>. Estado: <b id="conn-status">…</b></p>
           <p class="muted" id="conn-hint" style="margin-top:4px"></p>
 
@@ -502,6 +395,94 @@
             <button class="btn ghost admin-only" id="setup-btn" style="margin-top:8px"><svg class="ic"><use href="#i-sheet"/></svg> Configurar Google Sheet</button>
           </div>
         </div>
+      </section>
+
+      <!-- ══════════════════ AJUSTES (cuenta, bot, PWA, reglas, suscripción) ══════════════════ -->
+      <section class="view" id="view-settings">
+        <div class="view-head">
+          <div><h1 class="h1">Ajustes</h1><p class="lead">Tu cuenta, permisos y cómo tus trabajadores hacen check-in.</p></div>
+        </div>
+
+        <!-- Guía de bienvenida (reabre el asistente paso a paso) -->
+        <div class="card card-pad">
+          <h3><svg class="ic"><use href="#i-check"/></svg> Guía de bienvenida</h3>
+          <p class="desc">Repasa los primeros pasos para dejar StarX listo: importar datos, añadir trabajadores y activar el check-in.</p>
+          <button class="btn ghost admin-only" id="settings-onboard-btn"><svg class="ic"><use href="#i-refresh"/></svg> Ver guía de bienvenida</button>
+        </div>
+
+        <!-- Cuenta: empresa + cambio de contraseña (permisos) -->
+        <div class="card card-pad mt" id="acct-card">
+          <h3><svg class="ic"><use href="#i-users"/></svg> Cuenta y permisos</h3>
+          <p class="desc">Empresa: <b id="acct-company">…</b></p>
+          <div id="acct-pw-wrap">
+            <div class="row2">
+              <div class="field"><label>Contraseña actual</label><input type="password" id="acct-cur" autocomplete="current-password"></div>
+              <div class="field"><label>Nueva contraseña</label><input type="password" id="acct-new" autocomplete="new-password" placeholder="mínimo 6 caracteres"></div>
+            </div>
+            <div class="field"><label>Repite la nueva contraseña</label><input type="password" id="acct-new2" autocomplete="new-password"></div>
+            <button class="btn admin-only" id="acct-pw-save"><svg class="ic"><use href="#i-check"/></svg> Cambiar contraseña</button>
+          </div>
+          <p class="muted hidden" id="acct-pw-locked">La contraseña de esta instalación se define con la variable <code>PLATFORM_PASSWORD</code> del servidor.</p>
+          <div class="field admin-only" style="margin-top:18px;border-top:1px solid var(--border);padding-top:18px">
+            <label>Tus datos</label>
+            <button class="btn ghost sm" id="acct-export" type="button"><svg class="ic"><use href="#i-import"/></svg> Exportar todos mis datos</button>
+            <p class="muted" style="margin-top:6px">Descarga un archivo con todos tus puntos, trabajadores y visitas — por si necesitas una copia o quieres migrar de plataforma.</p>
+          </div>
+        </div>
+
+        <!-- Bot de Telegram (control completo) -->
+        <div class="card card-pad mt">
+          <div class="deploy-head">
+            <span class="dh-ic"><svg class="ic"><use href="#i-send"/></svg></span>
+            <div><div class="dh-t">Bot de Telegram <span class="pill off" id="bot-pill">…</span></div><div class="dh-d" id="bot-status">Comprobando…</div></div>
+          </div>
+          <div class="toolbar">
+            <button class="btn admin-only" id="bot-start"><svg class="ic"><use href="#i-power"/></svg> Encender bot</button>
+            <button class="btn danger admin-only hidden" id="bot-stop"><svg class="ic"><use href="#i-power"/></svg> Apagar bot</button>
+          </div>
+          <p class="desc" style="margin-top:14px">StarX usa <b>un único bot compartido</b>, ya configurado por la plataforma — tú solo lo enciendes o apagas aquí, no hay tokens que gestionar.</p>
+          <ol class="muted" style="margin:8px 0 0; padding-left:20px; line-height:1.9">
+            <li>Carga a tus trabajadores con su <b>teléfono</b> (en <b>Trabajadores</b> o por importación/API).</li>
+            <li>El trabajador abre el bot y pulsa <code>/start</code> (o usa el enlace de abajo).</li>
+            <li>Comparte su número de teléfono y queda enlazado a <b>tu empresa</b> automáticamente.</li>
+            <li>Pulsa <code>/route</code>, elige una parada y hace su check-in con ubicación y foto.</li>
+          </ol>
+          <div class="field" style="margin-top:14px">
+            <label>Enlace de alta para tus trabajadores</label>
+            <div class="key-row">
+              <input id="bot-invite" type="text" readonly placeholder="Se genera al conectar el bot…">
+              <button class="btn ghost sm" id="bot-invite-copy" type="button">Copiar</button>
+            </div>
+            <p class="muted" style="margin-top:6px">Compártelo por WhatsApp/Telegram. Quien lo abra se registrará en <b>tu empresa</b> (código <b id="bot-code">…</b>).</p>
+          </div>
+          <p class="muted" style="margin-top:12px">Si el botón <b>Encender bot</b> aparece deshabilitado, el operador de la plataforma aún no ha configurado el token del bot en el servidor.</p>
+        </div>
+
+        <!-- App de check-in (PWA) -->
+        <div class="card card-pad mt">
+          <h3><svg class="ic"><use href="#i-globe"/></svg> App de check-in (PWA)</h3>
+          <p class="desc">Permite que tus trabajadores hagan check-in desde el navegador (además del bot). Entran en la pantalla de login con su <b>teléfono</b> (el mismo que cargaste).</p>
+          <div class="deploy-head">
+            <span class="dh-ic"><svg class="ic"><use href="#i-globe"/></svg></span>
+            <div><div class="dh-t">Estado</div><div class="dh-d" id="pwa-status">Comprobando…</div></div>
+          </div>
+          <div class="toolbar">
+            <button class="btn admin-only" id="pwa-toggle"><svg class="ic"><use href="#i-power"/></svg> Activar PWA</button>
+          </div>
+        </div>
+
+        <!-- Reglas de check-in -->
+        <div class="card card-pad mt">
+          <h3><svg class="ic"><use href="#i-check"/></svg> Reglas de check-in</h3>
+          <p class="desc">Exige una <b>foto</b> en cada check-in (bot y app). Si está activo, no se acepta un check-in sin foto.</p>
+          <div class="deploy-head">
+            <span class="dh-ic"><svg class="ic"><use href="#i-check"/></svg></span>
+            <div><div class="dh-t">Foto obligatoria</div><div class="dh-d" id="photo-status">Comprobando…</div></div>
+          </div>
+          <div class="toolbar">
+            <button class="btn admin-only" id="photo-toggle"><svg class="ic"><use href="#i-power"/></svg> Hacer obligatoria</button>
+          </div>
+        </div>
 
         <!-- Suscripción -->
         <div class="card card-pad mt" id="billing-card" style="display:none">
@@ -521,7 +502,16 @@
           <div><h1 class="h1">Hacer check-in</h1><p class="lead" id="ci-hello">Elige tu parada, comparte tu ubicación y añade una foto.</p></div>
         </div>
 
-        <div class="card card-pad">
+        <!-- Personal stats: quick sense of today / week / streak without opening a report -->
+        <div class="grid grid-4">
+          <div class="card kpi"><div class="lbl"><svg class="ic"><use href="#i-clock"/></svg> Hoy</div><div class="num" id="ci-k-today">–</div><div class="sub">check-ins hoy</div></div>
+          <div class="card kpi"><div class="lbl"><svg class="ic"><use href="#i-chart"/></svg> Esta semana</div><div class="num" id="ci-k-week">–</div><div class="sub">últimos 7 días</div></div>
+          <div class="card kpi"><div class="lbl"><svg class="ic"><use href="#i-check"/></svg> Total</div><div class="num" id="ci-k-total">–</div><div class="sub">desde siempre</div></div>
+          <div class="card kpi"><div class="lbl"><svg class="ic"><use href="#i-send"/></svg> Racha</div><div class="num" id="ci-k-streak">–</div><div class="sub">días seguidos activo</div></div>
+        </div>
+
+        <div class="card card-pad mt">
+          <h3><svg class="ic"><use href="#i-check"/></svg> Hacer check-in</h3>
           <div class="field">
             <label>Parada</label>
             <select id="ci-point"><option value="">Cargando paradas…</option></select>
@@ -544,6 +534,19 @@
           </div>
 
           <button class="btn" id="ci-submit"><svg class="ic"><use href="#i-check"/></svg> Enviar check-in</button>
+        </div>
+
+        <!-- Their own assigned points, with today's status and last visit — so a worker
+             can see their whole route, not just the dropdown they're about to submit. -->
+        <div class="section-title"><svg class="ic"><use href="#i-pin"/></svg> Tus paradas asignadas</div>
+        <div class="card chart-card">
+          <div id="ci-points-wrap"><div class="empty">Cargando…</div></div>
+        </div>
+
+        <!-- Their own recent check-ins — a small personal log, not the company-wide table. -->
+        <div class="section-title"><svg class="ic"><use href="#i-clock"/></svg> Tus últimos check-ins</div>
+        <div class="card chart-card">
+          <div id="ci-recent-wrap"><div class="empty">Cargando…</div></div>
         </div>
       </section>
 
@@ -588,7 +591,7 @@
   <div class="toast" id="toast"></div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script src="/platform/assets/i18n.js?v=23"></script>
-  <script src="/platform/assets/app.js?v=23"></script>
+  <script src="/platform/assets/i18n.js?v=24"></script>
+  <script src="/platform/assets/app.js?v=24"></script>
 </body>
 </html>

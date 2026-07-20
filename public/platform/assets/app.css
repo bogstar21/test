@@ -99,7 +99,8 @@ a:hover { text-decoration: underline; }
 }
 .mark svg { width: 16px; height: 16px; }
 .brand { font-weight: 700; letter-spacing: -0.02em; font-size: 19px; color: var(--strong); }
-.brand-row { display: inline-flex; align-items: center; gap: 10px; }
+.brand-row { display: inline-flex; align-items: center; gap: 10px; cursor: pointer; }
+.brand-row:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 6px; }
 
 /* ── Buttons ───────────────────────────────────────────────────────────── */
 /* Minimal, solid: primary uses the ink/accent gradient token; ghost is a quiet outline. */
@@ -135,7 +136,7 @@ a:hover { text-decoration: underline; }
 /* ── Badge / pill ──────────────────────────────────────────────────────── */
 .badge {
   display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 11px;
-  border: 1px solid var(--border); border-radius: 999px;
+  border: 1px solid var(--border); border-radius: 999px; white-space: nowrap; flex-shrink: 0;
   font-size: 11.5px; color: var(--dim); background: var(--glass);
 }
 .badge.ok { border-color: rgba(81,211,154,0.45); color: var(--ok); }
@@ -154,6 +155,10 @@ a:hover { text-decoration: underline; }
   margin: 6px 0 0; padding: 12px 14px; border-radius: 10px;
   border: 1px solid var(--border); background: var(--glass);
   overflow-x: auto; font-size: 12.5px; line-height: 1.55;
+  /* .code-block is a <pre> inside a flex column (.field). Flex items default to
+     min-width:auto, and a <pre>'s min-content width is its full unwrapped line —
+     without this it blows out past the card/viewport instead of scrolling in place. */
+  min-width: 0; max-width: 100%;
 }
 .code-block code {
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
@@ -582,7 +587,15 @@ select, .select {
 @media (max-width: 720px) {
   .topbar { padding: 0 15px; height: 56px; }
   .topbar .meta { display: none; }
+  .top-right { gap: 8px; }
   .top-right .user { display: none; }
+  /* The bot-status badge collapses to just its colored dot (still conveys on/off) so the
+     topbar cluster — badge + language switch + theme + logout — fits without overflowing
+     or wrapping on a real phone width. */
+  .badge-txt { display: none; }
+  .badge { padding: 0 7px; }
+  .langsw { padding: 2px; gap: 1px; }
+  .langsw button { padding: 3px 6px; font-size: 10px; }
   .main { padding: 22px 16px 40px; }
   .h1 { font-size: 23px; }
   .view-head { gap: 12px; margin-bottom: 18px; align-items: stretch; }

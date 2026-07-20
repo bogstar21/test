@@ -151,7 +151,6 @@
     else if (v === "workers") loadWorkers();
     else if (v === "visits") loadVisits();
     else if (v === "stats") loadStats();
-    else if (v === "bot") loadBot();
     else if (v === "import") renderMapping();
     else if (v === "settings") { loadSettings(); loadBot(); }
     else if (v === "checkin") loadCheckin();
@@ -1038,7 +1037,9 @@
   function setBadge(on) {
     var b = $("#bot-badge");
     b.className = "badge" + (on ? " ok" : "");
-    b.innerHTML = '<span class="dot ' + (on ? "dot-ok" : "dot-muted") + '"></span> Bot ' + (on ? "en línea" : "apagado");
+    // Text lives in its own span so CSS can collapse the badge to just the colored dot
+    // on very narrow screens (see .badge-txt in the mobile media query) without touching JS.
+    b.innerHTML = '<span class="dot ' + (on ? "dot-ok" : "dot-muted") + '"></span><span class="badge-txt"> Bot ' + (on ? "en línea" : "apagado") + '</span>';
     var st = $("#st-bot");
     if (st) st.innerHTML = '<span class="dot ' + (on ? "dot-ok" : "dot-muted") + '"></span> ' + (on ? "En línea" : "Apagado");
   }
@@ -1065,14 +1066,6 @@
     startBtn.disabled = !configured;
     $("#bot-stop").classList.toggle("hidden", !on || !state.isAdmin);
     setBadge(on);
-
-    // Mirror the same status into the compact "Ajustes" summary card, if present.
-    var pill2 = $("#set-bot-pill");
-    if (pill2) { pill2.className = "pill " + (on ? "on" : "off"); pill2.textContent = on ? "en línea" : "apagado"; }
-    var st2 = $("#set-bot-status");
-    if (st2) st2.textContent = on
-      ? ("Bot @" + (s.username || "") + " activo, recibiendo check-ins.")
-      : (configured ? "Apagado. Enciéndelo en la pestaña Bot de Telegram." : "No configurado en el servidor (falta TELEGRAM_TOKEN).");
 
     // Worker self-enrolment deep-link (needs the running bot's @username + this company's code).
     var codeEl = $("#bot-code"); if (codeEl) codeEl.textContent = state.code || "—";
@@ -1150,18 +1143,63 @@
 
   // ── Check-in (worker PWA) ──────────────────────────────────────────────────────
   var checkin = { lat: "", lng: "" };
+  // Own assigned points: a compact list with today's ✅ and the last time they were
+  // visited — the worker's whole route at a glance, not just the check-in dropdown.
+  function renderCheckinPoints(points) {
+    var wrap = $("#ci-points-wrap");
+    if (!wrap) return;
+    if (!points.length) { wrap.innerHTML = '<div class="empty">Aún no tienes paradas asignadas.</div>'; return; }
+    wrap.innerHTML = points.map(function (p) {
+      var status = p.visitedToday
+        ? '<span class="pill on">hecho hoy</span>'
+        : '<span class="pill off">pendiente</span>';
+      var last = p.lastVisit ? "Última visita: " + fmtTime(p.lastVisit) : "Sin visitas todavía";
+      return '<div class="bl-row" style="flex-wrap:wrap">' +
+        '<span class="bl-name" style="flex:1 1 auto;white-space:normal">' + esc(p.name || p.address || p.id) + '</span>' +
+        status +
+        '<div class="muted" style="flex-basis:100%;margin-top:2px;font-size:12px">' + last + '</div></div>';
+    }).join("");
+  }
+  // Own recent check-ins: a small personal log (not the company-wide Visitas table).
+  function renderCheckinRecent(recent) {
+    var wrap = $("#ci-recent-wrap");
+    if (!wrap) return;
+    if (!recent.length) { wrap.innerHTML = '<div class="empty">Aún no tienes check-ins.</div>'; return; }
+    wrap.innerHTML = recent.map(function (v) {
+      var photo = v.photoCount ? ("📸 " + v.photoCount) : "";
+      var map = v.mapsLink ? '<a href="' + esc(v.mapsLink) + '" target="_blank" rel="noopener">mapa ↗</a>' : "";
+      return '<div class="bl-row" style="flex-wrap:wrap">' +
+        '<span class="bl-name" style="flex:1 1 auto;white-space:normal">' + esc(v.pointName || v.pointId) + '</span>' +
+        '<span class="muted">' + fmtTime(v.timestamp) + '</span>' +
+        '<div class="muted" style="flex-basis:100%;margin-top:2px;font-size:12px">' + [photo, map].filter(Boolean).join(" · ") + '</div></div>';
+    }).join("");
+  }
+  async function loadCheckinStats() {
+    try {
+      var s = await api("/api/checkin/stats");
+      $("#ci-k-today").textContent = s.today || 0;
+      $("#ci-k-week").textContent = s.week || 0;
+      $("#ci-k-total").textContent = s.total || 0;
+      $("#ci-k-streak").textContent = s.streakDays || 0;
+      renderCheckinPoints(s.points || []);
+      renderCheckinRecent(s.recent || []);
+    } catch (e) { /* non-critical panels — leave the dashes */ }
+  }
   async function loadCheckin() {
     var sel = $("#ci-point");
     try {
       // Only the stops assigned to THIS worker; a suffix marks those already done today.
       var data = await api("/api/checkin/points");
       var points = data.points || [];
-      if (!points.length) { sel.innerHTML = '<option value="">No hay paradas asignadas</option>'; return; }
-      sel.innerHTML = points.map(function (p) {
-        var mark = p.visitedToday ? " — hecho hoy" : "";
-        return '<option value="' + esc(p.id) + '">' + esc(p.name || p.address || p.id) + mark + "</option>";
-      }).join("");
+      if (!points.length) { sel.innerHTML = '<option value="">No hay paradas asignadas</option>'; }
+      else {
+        sel.innerHTML = points.map(function (p) {
+          var mark = p.visitedToday ? " — hecho hoy" : "";
+          return '<option value="' + esc(p.id) + '">' + esc(p.name || p.address || p.id) + mark + "</option>";
+        }).join("");
+      }
     } catch (e) { sel.innerHTML = '<option value="">' + esc(e.message) + "</option>"; }
+    loadCheckinStats();
   }
   function captureLocation() {
     var st = $("#ci-geo-status");
@@ -1372,13 +1410,17 @@
     finally { btn.disabled = false; }
   }
 
+  // Full data export: a plain navigation so the browser's normal download flow (and the
+  // session cookie) just works — no need for fetch+blob plumbing.
+  function exportAllData() { window.location.href = "/api/export"; }
+
   // ── Onboarding wizard (first-run guide; also reopenable from Ajustes) ────────
   var OB_STEPS = [
     { icon: "i-check", title: "Bienvenido a StarX", desc: "Te llevamos por los primeros pasos para dejar tu empresa lista para operar. Son solo un par de minutos." },
-    { icon: "i-import", title: "Importa tus puntos", desc: "Sube un Excel/CSV con tus paradas, o añádelas una a una. Sin coordenadas — se rellenan solas en el primer check-in.", action: { label: "Ir a Importar", view: "import" } },
+    { icon: "i-import", title: "Importa tus puntos", desc: "Sube un Excel/CSV con tus paradas, o añádelas una a una. Sin coordenadas — se rellenan solas en el primer check-in.", action: { label: "Ir a Conexiones", view: "import" } },
     { icon: "i-users", title: "Añade a tus trabajadores", desc: "Cárgalos con su teléfono. Se enlazan solos al compartir su número en el bot — sin contraseñas que gestionar.", action: { label: "Ir a Trabajadores", view: "workers" } },
-    { icon: "i-send", title: "Activa el check-in", desc: "Enciende el bot de Telegram, la app web (PWA), o ambos. Tus trabajadores fichan con GPS y foto en segundos.", action: { label: "Ir al Bot de Telegram", view: "bot" } },
-    { icon: "i-globe", title: "Conecta tu sistema (opcional)", desc: "En Ajustes → Conexiones tienes tu clave de API única para leer las visitas o cargar tu catálogo desde tu propio software.", action: { label: "Ir a Ajustes", view: "settings" } },
+    { icon: "i-send", title: "Activa el check-in", desc: "Enciende el bot de Telegram, la app web (PWA), o ambos, desde Ajustes. Tus trabajadores fichan con GPS y foto en segundos.", action: { label: "Ir a Ajustes", view: "settings" } },
+    { icon: "i-globe", title: "Conecta tu sistema (opcional)", desc: "En Conexiones tienes tu clave de API única para leer las visitas o cargar tu catálogo desde tu propio software.", action: { label: "Ir a Conexiones", view: "import" } },
   ];
   var obIdx = 0;
   function renderOnboard() {
@@ -1429,6 +1471,14 @@
 
     // Sidebar nav
     $$(".nav").forEach(function (t) { t.onclick = function () { showView(t.dataset.view); }; });
+
+    // Brand mark in the topbar doubles as "home" — back to the dashboard from anywhere
+    // (worker sessions have no sidebar nav to begin with, so this is a no-op for them).
+    var brandHome = $("#brand-home");
+    if (brandHome) {
+      brandHome.onclick = function () { if (state.role !== "worker") showView("dashboard"); };
+      brandHome.onkeydown = function (e) { if ((e.key === "Enter" || e.key === " ") && state.role !== "worker") { e.preventDefault(); showView("dashboard"); } };
+    }
 
     // Mobile drawer
     $("#nav-toggle").onclick = function () { document.body.classList.toggle("nav-open"); };
@@ -1562,8 +1612,8 @@
     var photoBtn = $("#photo-toggle"); if (photoBtn) photoBtn.onclick = togglePhoto;
     var genBtn = $("#conn-key-gen"); if (genBtn) genBtn.onclick = generateConnectorKey;
     var cpyBtn = $("#conn-key-copy"); if (cpyBtn) cpyBtn.onclick = copyConnectorKey;
-    var goBotBtn = $("#set-bot-goto"); if (goBotBtn) goBotBtn.onclick = function () { showView("bot"); };
     var pwSaveBtn = $("#acct-pw-save"); if (pwSaveBtn) pwSaveBtn.onclick = changePassword;
+    var exportBtn = $("#acct-export"); if (exportBtn) exportBtn.onclick = exportAllData;
     var obBtn = $("#settings-onboard-btn"); if (obBtn) obBtn.onclick = function () { openOnboarding(); };
 
     // Onboarding wizard controls

@@ -49,6 +49,65 @@ function mountCheckinRoutes(app) {
     }
   });
 
+  // Personal stats for the logged-in worker: their own counts + assigned points with
+  // per-point status, so the worker PWA can show more than a bare check-in form.
+  r.get("/stats", async (req, res) => {
+    try {
+      const source = forTenant(config.getTenant(req));
+      const worker = await sessionWorker(source, req.user || {});
+      if (!worker) return res.json({ worker: null, today: 0, week: 0, total: 0, streakDays: 0, points: [], recent: [] });
+
+      const today = localDateStr(null, config.TIMEZONE);
+      const allVisits = await source.listVisits({ limit: 3000 });
+      const mine = allVisits.filter(v => visitBelongsToWorker(v, worker))
+        .sort((a, b) => String(b.timestamp).localeCompare(String(a.timestamp)));
+
+      // Week = last 7 calendar days including today.
+      const days7 = new Set();
+      for (let i = 0; i < 7; i++) {
+        const d = new Date(); d.setDate(d.getDate() - i);
+        days7.add(localDateStr(d.toISOString(), config.TIMEZONE));
+      }
+      const activeDays = new Set(mine.map(v => localDateStr(v.timestamp, config.TIMEZONE)));
+      const todayCount = mine.filter(v => localDateStr(v.timestamp, config.TIMEZONE) === today).length;
+      const weekCount = mine.filter(v => days7.has(localDateStr(v.timestamp, config.TIMEZONE))).length;
+
+      // Streak: consecutive days (today backward) with at least one check-in.
+      let streakDays = 0;
+      for (let i = 0; ; i++) {
+        const d = new Date(); d.setDate(d.getDate() - i);
+        const key = localDateStr(d.toISOString(), config.TIMEZONE);
+        if (activeDays.has(key)) streakDays++; else break;
+        if (i > 400) break; // safety cap
+      }
+
+      const doneToday = new Set(mine.filter(v => localDateStr(v.timestamp, config.TIMEZONE) === today).map(v => String(v.pointId)));
+      const lastVisitByPoint = {};
+      mine.forEach(v => { const k = String(v.pointId); if (!lastVisitByPoint[k]) lastVisitByPoint[k] = v.timestamp; });
+
+      const assigned = (await source.listPointsForWorker(worker.workerId)).filter(p => p.active);
+      const points = assigned.map(p => ({
+        id: p.id, name: p.name, address: p.address,
+        lat: p.lat, lng: p.lng, geolocated: p.geolocated,
+        visitedToday: doneToday.has(String(p.id)),
+        lastVisit: lastVisitByPoint[String(p.id)] || null,
+      }));
+
+      res.json({
+        worker: { name: worker.name, workerId: worker.workerId },
+        today: todayCount, week: weekCount, total: mine.length, streakDays,
+        points,
+        recent: mine.slice(0, 8).map(v => ({
+          timestamp: v.timestamp, pointName: v.pointName, pointId: v.pointId,
+          photoCount: v.photoCount, mapsLink: v.mapsLink, note: v.note,
+        })),
+      });
+    } catch (e) {
+      console.error("/api/checkin/stats error:", e && e.message);
+      res.status(500).json({ error: (e && e.message) || "server_error" });
+    }
+  });
+
   r.post("/", requireActiveSubscription, bigJson, async (req, res) => {
     try {
       const b = req.body || {};
