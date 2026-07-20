@@ -25,6 +25,9 @@ function mountPlatformRoutes(app) {
       name: req.user.name, company: req.user.company,
       tenantId: req.user.tenantId, role: req.user.role,
       code: t && t.code || "",
+      // The env-configured "default" tenant's password lives in PLATFORM_PASSWORD, not the
+      // DB — the Settings UI uses this to hide/lock the change-password form for it.
+      isDefaultTenant: !!(t && t.isDefault),
     });
   });
 
@@ -45,10 +48,12 @@ function mountPlatformRoutes(app) {
       const isAdmin = req.user.role === "admin";
       const pwaEnabled = String(await source.getSetting("pwa_enabled", "0")) === "1";
       const photoRequired = String(await source.getSetting("photo_required", "0")) === "1";
+      const onboardingSeen = String(await source.getSetting("onboarding_seen", "0")) === "1";
       const key = await ensureConnectorKey(source, isAdmin);
       res.json({
         pwaEnabled,
         photoRequired,
+        onboardingSeen,
         connectorEnabled: !!key || !!(process.env.INTEGRATION_API_KEY || ""),
         connectorKey:     isAdmin ? key : "",
       });
@@ -81,12 +86,42 @@ function mountPlatformRoutes(app) {
       if (typeof (req.body && req.body.photoRequired) !== "undefined") {
         await source.setSetting("photo_required", req.body.photoRequired ? "1" : "0");
       }
+      if (typeof (req.body && req.body.onboardingSeen) !== "undefined") {
+        await source.setSetting("onboarding_seen", req.body.onboardingSeen ? "1" : "0");
+      }
       const pwaEnabled = String(await source.getSetting("pwa_enabled", "0")) === "1";
       const photoRequired = String(await source.getSetting("photo_required", "0")) === "1";
+      const onboardingSeen = String(await source.getSetting("onboarding_seen", "0")) === "1";
       const key = String((await source.getSetting(CONNECTOR_KEY_SETTING, "")) || "");
-      res.json({ ok: true, pwaEnabled, photoRequired, connectorEnabled: !!key || !!(process.env.INTEGRATION_API_KEY || "") });
+      res.json({ ok: true, pwaEnabled, photoRequired, onboardingSeen, connectorEnabled: !!key || !!(process.env.INTEGRATION_API_KEY || "") });
     } catch (e) {
       console.error("/api/settings error:", e && e.message);
+      res.status(500).json({ error: (e && e.message) || "server_error" });
+    }
+  });
+
+  // Admin changes their own company's login password. The env-configured "default" tenant
+  // has no DB row of its own — its password is PLATFORM_PASSWORD — so it's rejected here
+  // with a clear explanation instead of silently doing nothing (reload() would re-derive
+  // it from env on the next boot anyway).
+  r.post("/account/password", requireRole("admin"), async (req, res) => {
+    try {
+      const tenant = config.getTenant(req);
+      if (tenant.isDefault) {
+        return res.status(400).json({ error: "default_tenant", detail: "La contraseña de esta instalación se define con la variable PLATFORM_PASSWORD del servidor." });
+      }
+      const cur  = String((req.body && req.body.currentPassword) || "");
+      const next = String((req.body && req.body.newPassword) || "");
+      if (!config.tenants.verifyPassword(tenant, cur)) {
+        return res.status(401).json({ error: "bad_password", detail: "La contraseña actual no es correcta." });
+      }
+      if (next.length < 6) {
+        return res.status(400).json({ error: "weak_password", detail: "La nueva contraseña debe tener al menos 6 caracteres." });
+      }
+      await config.tenants.update(tenant.id, { passwordHash: config.tenants.hashPassword(next) });
+      res.json({ ok: true });
+    } catch (e) {
+      console.error("/api/account/password error:", e && e.message);
       res.status(500).json({ error: (e && e.message) || "server_error" });
     }
   });

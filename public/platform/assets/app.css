@@ -300,6 +300,37 @@ a:hover { text-decoration: underline; }
 /* Compact dashboard charts (source donut + weekday bars). */
 .chart-sm { min-height: 168px; display: flex; align-items: center; justify-content: center; }
 .chart-sm .empty { padding: 40px 0; }
+/* Shared SVG bar chart (weekday / hourly breakdowns). Bars sit flush on the baseline —
+   no floating pill for small values — with a light grid and a hover-highlighted tooltip. */
+.barchart { display: block; width: 100%; height: auto; overflow: visible; }
+.barchart .grid-line { stroke: var(--border); stroke-width: 1; }
+.barchart .axis-base { stroke: var(--border-strong); stroke-width: 1; }
+.barchart .axis-lbl { fill: var(--faint); font-size: 10px; }
+.barchart .bar-val { fill: var(--strong); font-size: 10px; font-weight: 700; }
+.barchart .bar-seg path { transition: filter .14s ease; cursor: default; }
+.barchart .bar-seg:hover path { filter: brightness(1.14); }
+
+/* ── Onboarding wizard (first-run guide, reopenable from Ajustes) ───────────────── */
+.onboard { position: fixed; inset: 0; z-index: 60; display: flex; align-items: center; justify-content: center;
+  background: rgba(10,9,7,0.5); backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px); padding: 20px; }
+.onboard.hidden { display: none; }
+.ob-sheet { width: 100%; max-width: 440px; background: var(--bg-2); border: 1px solid var(--border);
+  border-radius: var(--radius-lg); padding: 34px 28px 26px; text-align: center; position: relative;
+  box-shadow: 0 40px 100px -30px rgba(0,0,0,0.5); animation: ob-pop .22s ease; }
+@keyframes ob-pop { from { opacity: 0; transform: scale(.95) translateY(8px); } to { opacity: 1; transform: scale(1) translateY(0); } }
+.ob-skip { position: absolute; top: 14px; right: 14px; background: none; border: 0; color: var(--faint); cursor: pointer; font-size: 12.5px; font-family: inherit; }
+.ob-skip:hover { color: var(--text); }
+.ob-icon { width: 64px; height: 64px; margin: 0 auto 18px; border-radius: 50%; background: var(--grad-soft);
+  display: flex; align-items: center; justify-content: center; color: var(--accent);
+  animation: ob-float 2.4s ease-in-out infinite; }
+.ob-icon svg { width: 28px; height: 28px; }
+@keyframes ob-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
+.ob-sheet h3 { margin: 0 0 10px; font-size: 19px; font-weight: 700; color: var(--strong); }
+.ob-sheet p { margin: 0 0 20px; color: var(--dim); font-size: 14px; line-height: 1.55; }
+.ob-dots { display: flex; gap: 6px; justify-content: center; margin-bottom: 22px; }
+.ob-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--border-strong); transition: background .18s ease, width .18s ease; }
+.ob-dot.on { background: var(--accent); width: 18px; border-radius: 4px; }
+.ob-actions { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
 .donut-wrap { display: flex; align-items: center; gap: 22px; flex-wrap: wrap; justify-content: center; width: 100%; }
 .donut-legend { display: flex; flex-direction: column; gap: 10px; font-size: 13px; color: var(--dim); }
 .donut-legend .dot { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 7px; vertical-align: middle; }

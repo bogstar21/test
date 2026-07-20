@@ -8,7 +8,7 @@
   <link rel="icon" href="/platform/assets/icon.svg">
   <link rel="manifest" href="/platform/manifest.webmanifest">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-  <link rel="stylesheet" href="/platform/assets/app.css?v=22">
+  <link rel="stylesheet" href="/platform/assets/app.css?v=23">
   <script>
     // Apply theme before first paint. Light (warm paper) is the default; only an explicit 'dark' opts in.
     (function () { try { if (localStorage.getItem('starx-theme') === 'dark') document.documentElement.classList.add('dark'); } catch (e) {} })();
@@ -36,6 +36,7 @@
     <symbol id="i-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></symbol>
     <symbol id="i-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></symbol>
     <symbol id="i-search" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></symbol>
+    <symbol id="i-settings" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.2"/><path d="M19.4 13a7.4 7.4 0 0 0 0-2l2-1.4-2-3.4-2.3.8a7.6 7.6 0 0 0-1.7-1L15 3.6h-6l-.4 2.4a7.6 7.6 0 0 0-1.7 1l-2.3-.8-2 3.4L4.6 11a7.4 7.4 0 0 0 0 2l-2 1.4 2 3.4 2.3-.8a7.6 7.6 0 0 0 1.7 1l.4 2.4h6l.4-2.4a7.6 7.6 0 0 0 1.7-1l2.3.8 2-3.4-2-1.4Z"/></symbol>
   </svg>
 
   <header class="topbar">
@@ -75,6 +76,7 @@
       <div class="nav-label" style="margin-top:8px">Herramientas</div>
       <button class="nav" data-view="bot"><svg class="ic"><use href="#i-send"/></svg> Bot de Telegram</button>
       <button class="nav" data-view="import"><svg class="ic"><use href="#i-import"/></svg> Importar y configurar</button>
+      <button class="nav" data-view="settings"><svg class="ic"><use href="#i-settings"/></svg> Ajustes</button>
       <div class="side-foot">StarX · MVP<br>Check-ins de campo con GPS y fotos.</div>
     </nav>
 
@@ -321,20 +323,10 @@
       <!-- ══════════════════ IMPORTAR Y CONFIGURAR ══════════════════ -->
       <section class="view" id="view-import">
         <div class="view-head">
-          <div><h1 class="h1">Importar y configurar</h1><p class="lead">Trae tus datos: sube puntos o trabajadores desde Excel/CSV, o prepara tu Google Sheet.</p></div>
+          <div><h1 class="h1">Importar y configurar</h1><p class="lead">Trae tus datos: sube puntos o trabajadores desde Excel/CSV.</p></div>
         </div>
 
-        <div class="card card-pad" id="billing-card" style="display:none">
-          <h3><svg class="ic"><use href="#i-chart"/></svg> Tu suscripción</h3>
-          <div class="deploy-head">
-            <span class="dh-ic"><svg class="ic"><use href="#i-chart"/></svg></span>
-            <div><div class="dh-t">Plan <b id="bill-plan">…</b> <span id="bill-status" class="pill off"></span></div><div class="dh-d" id="bill-detail">…</div></div>
-          </div>
-          <div class="toolbar admin-only" id="bill-actions"></div>
-          <p class="muted" id="bill-hint" style="margin-top:8px"></p>
-        </div>
-
-        <div class="card card-pad mt">
+        <div class="card card-pad">
           <h3><svg class="ic"><use href="#i-import"/></svg> Importar desde Excel / CSV</h3>
           <p class="desc">Sube un archivo <b>.xlsx / .xls / .csv</b> con tus puntos o trabajadores. Te dejamos asignar cada columna antes de importar.</p>
           <div class="field">
@@ -389,6 +381,49 @@
           </div>
         </div>
 
+      </section>
+
+      <!-- ══════════════════ AJUSTES ══════════════════ -->
+      <section class="view" id="view-settings">
+        <div class="view-head">
+          <div><h1 class="h1">Ajustes</h1><p class="lead">Tu cuenta, el bot, y cómo StarX se conecta con el resto de tu sistema.</p></div>
+        </div>
+
+        <!-- Guía de bienvenida (reabre el asistente paso a paso) -->
+        <div class="card card-pad">
+          <h3><svg class="ic"><use href="#i-check"/></svg> Guía de bienvenida</h3>
+          <p class="desc">Repasa los primeros pasos para dejar StarX listo: importar datos, añadir trabajadores y activar el check-in.</p>
+          <button class="btn ghost admin-only" id="settings-onboard-btn"><svg class="ic"><use href="#i-refresh"/></svg> Ver guía de bienvenida</button>
+        </div>
+
+        <!-- Cuenta: empresa + cambio de contraseña -->
+        <div class="card card-pad mt" id="acct-card">
+          <h3><svg class="ic"><use href="#i-users"/></svg> Cuenta</h3>
+          <p class="desc">Empresa: <b id="acct-company">…</b></p>
+          <div id="acct-pw-wrap">
+            <div class="row2">
+              <div class="field"><label>Contraseña actual</label><input type="password" id="acct-cur" autocomplete="current-password"></div>
+              <div class="field"><label>Nueva contraseña</label><input type="password" id="acct-new" autocomplete="new-password" placeholder="mínimo 6 caracteres"></div>
+            </div>
+            <div class="field"><label>Repite la nueva contraseña</label><input type="password" id="acct-new2" autocomplete="new-password"></div>
+            <button class="btn admin-only" id="acct-pw-save"><svg class="ic"><use href="#i-check"/></svg> Cambiar contraseña</button>
+          </div>
+          <p class="muted hidden" id="acct-pw-locked">La contraseña de esta instalación se define con la variable <code>PLATFORM_PASSWORD</code> del servidor.</p>
+        </div>
+
+        <!-- Bot de Telegram (resumen — el control completo sigue en su propia pestaña) -->
+        <div class="card card-pad mt">
+          <h3><svg class="ic"><use href="#i-send"/></svg> Bot de Telegram</h3>
+          <div class="deploy-head">
+            <span class="dh-ic"><svg class="ic"><use href="#i-send"/></svg></span>
+            <div><div class="dh-t">Estado <span id="set-bot-pill" class="pill off">…</span></div><div class="dh-d" id="set-bot-status">Comprobando…</div></div>
+          </div>
+          <div class="toolbar">
+            <button class="btn ghost" id="set-bot-goto">Configurar bot →</button>
+          </div>
+        </div>
+
+        <!-- App de check-in (PWA) -->
         <div class="card card-pad mt">
           <h3><svg class="ic"><use href="#i-globe"/></svg> App de check-in (PWA)</h3>
           <p class="desc">Permite que tus trabajadores hagan check-in desde el navegador (además del bot). Entran en la pantalla de login con su <b>teléfono</b> (el mismo que cargaste).</p>
@@ -401,6 +436,7 @@
           </div>
         </div>
 
+        <!-- Reglas de check-in -->
         <div class="card card-pad mt">
           <h3><svg class="ic"><use href="#i-check"/></svg> Reglas de check-in</h3>
           <p class="desc">Exige una <b>foto</b> en cada check-in (bot y app). Si está activo, no se acepta un check-in sin foto.</p>
@@ -413,8 +449,9 @@
           </div>
         </div>
 
+        <!-- Conexiones: API + otras integraciones -->
         <div class="card card-pad mt">
-          <h3><svg class="ic"><use href="#i-send"/></svg> Conexión por API (conector)</h3>
+          <h3><svg class="ic"><use href="#i-send"/></svg> Conexiones</h3>
           <p class="desc">El cliente empuja su catálogo y lee las visitas por API. Se autentica con la cabecera <code>X-API-Key</code>. Estado: <b id="conn-status">…</b></p>
           <p class="muted" id="conn-hint" style="margin-top:4px"></p>
 
@@ -453,14 +490,29 @@
             <pre class="code-block"><code id="conn-curl">curl -H "X-API-Key: TU_CLAVE" \
   https://starx.up.railway.app/api/v1/visits?limit=500</code></pre>
           </div>
+
+          <div class="field">
+            <label>Otras integraciones</label>
+            <div class="toolbar">
+              <span class="pill on">Google Sheets</span>
+              <span class="pill off">Webhooks — próximamente</span>
+              <span class="pill off">Zapier — próximamente</span>
+            </div>
+            <p class="muted" style="margin-top:8px">Crea las pestañas <code>workers</code>, <code>points</code> y <code>visits</code> (con cabeceras) en tu hoja conectada. Se puede ejecutar de nuevo sin riesgo — nunca borra datos.</p>
+            <button class="btn ghost admin-only" id="setup-btn" style="margin-top:8px"><svg class="ic"><use href="#i-sheet"/></svg> Configurar Google Sheet</button>
+          </div>
         </div>
 
-        <div class="card card-pad mt">
-          <h3><svg class="ic"><use href="#i-sheet"/></svg> Preparar un Google Sheet</h3>
-          <p class="desc">Crea las pestañas <code>workers</code>, <code>points</code> y <code>visits</code> (con cabeceras) en tu hoja conectada. Se puede ejecutar de nuevo sin riesgo — nunca borra datos.</p>
-          <button class="btn ghost admin-only" id="setup-btn"><svg class="ic"><use href="#i-sheet"/></svg> Configurar hoja</button>
+        <!-- Suscripción -->
+        <div class="card card-pad mt" id="billing-card" style="display:none">
+          <h3><svg class="ic"><use href="#i-chart"/></svg> Tu suscripción</h3>
+          <div class="deploy-head">
+            <span class="dh-ic"><svg class="ic"><use href="#i-chart"/></svg></span>
+            <div><div class="dh-t">Plan <b id="bill-plan">…</b> <span id="bill-status" class="pill off"></span></div><div class="dh-d" id="bill-detail">…</div></div>
+          </div>
+          <div class="toolbar admin-only" id="bill-actions"></div>
+          <p class="muted" id="bill-hint" style="margin-top:8px"></p>
         </div>
-
       </section>
 
       <!-- ══════════════════ CHECK-IN (TRABAJADOR / PWA) ══════════════════ -->
@@ -517,10 +569,26 @@
     <img id="lightbox-img" alt="foto de check-in">
   </div>
 
+  <!-- Onboarding wizard: step-by-step first-run guide (also reopenable from Ajustes) -->
+  <div class="onboard hidden" id="onboard">
+    <div class="ob-sheet">
+      <button type="button" class="ob-skip" id="ob-skip">Saltar ✕</button>
+      <div class="ob-icon" id="ob-icon"><svg class="ic"><use href="#i-check"/></svg></div>
+      <h3 id="ob-title">…</h3>
+      <p id="ob-desc">…</p>
+      <div class="ob-dots" id="ob-dots"></div>
+      <div class="ob-actions">
+        <button class="btn ghost sm hidden" id="ob-back">Atrás</button>
+        <button class="btn ghost sm hidden" id="ob-goto">Ir ahora</button>
+        <button class="btn sm" id="ob-next">Siguiente</button>
+      </div>
+    </div>
+  </div>
+
   <div class="toast" id="toast"></div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script src="/platform/assets/i18n.js?v=22"></script>
-  <script src="/platform/assets/app.js?v=22"></script>
+  <script src="/platform/assets/i18n.js?v=23"></script>
+  <script src="/platform/assets/app.js?v=23"></script>
 </body>
 </html>

@@ -152,7 +152,8 @@
     else if (v === "visits") loadVisits();
     else if (v === "stats") loadStats();
     else if (v === "bot") loadBot();
-    else if (v === "import") { renderMapping(); loadSettings(); }
+    else if (v === "import") renderMapping();
+    else if (v === "settings") { loadSettings(); loadBot(); }
     else if (v === "checkin") loadCheckin();
   }
 
@@ -256,26 +257,82 @@
       '</div></div>';
   }
 
-  // Bars: check-ins by weekday (Monday-first), from the filtered recent list.
-  function renderWeekdayChart(list) {
-    var box = $("#chart-weekday");
+  // Shared SVG bar-chart renderer (used by the weekday and hourly breakdowns). Bars sit
+  // flush on the baseline with only the top corners rounded — no floating "pill" for
+  // small values — plus a light grid, a value label above each bar, and a hover tooltip.
+  var _barchartSeq = 0;
+  function renderBarsSVG(sel, cats, counts, opts) {
+    opts = opts || {};
+    var box = (typeof sel === "string") ? $(sel) : sel;
     if (!box) return;
-    var labels = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
+    var total = counts.reduce(function (a, b) { return a + b; }, 0);
+    if (!total) { box.innerHTML = '<div class="empty">' + (opts.emptyText || "Sin datos") + '</div>'; return; }
+
+    var n = counts.length;
+    var W = 720, H = opts.height || 190, padL = 30, padR = 10, padT = 24, padB = 24;
+    var iw = W - padL - padR, ih = H - padT - padB;
+    var max = Math.max.apply(null, counts.concat([1]));
+    var slot = iw / n;
+    var barW = Math.max(4, Math.min(opts.maxBarWidth || 30, slot * 0.58));
+    var baseY = padT + ih;
+    var ticks = 3, gridLines = "";
+    for (var g = 0; g <= ticks; g++) {
+      var gy = padT + (g / ticks) * ih;
+      gridLines += '<line class="grid-line" x1="' + padL + '" y1="' + gy + '" x2="' + (W - padR) + '" y2="' + gy + '"/>';
+    }
+
+    var gid = "bcg" + (_barchartSeq++);
+    var bars = "", labelsSvg = "";
+    for (var i = 0; i < n; i++) {
+      var c = counts[i];
+      var cx = padL + slot * i + slot / 2;
+      if (!opts.showLabel || opts.showLabel(i)) {
+        labelsSvg += '<text class="axis-lbl" x="' + cx + '" y="' + (H - 6) + '" text-anchor="middle">' + esc(String(cats[i])) + "</text>";
+      }
+      if (c > 0) {
+        var bh = Math.max(4, (c / max) * ih);
+        var top = baseY - bh;
+        var r = Math.min(6, barW / 2, bh);
+        var x0 = cx - barW / 2, x1 = cx + barW / 2;
+        var d = "M" + x0 + "," + baseY + " L" + x0 + "," + (top + r) +
+          " Q" + x0 + "," + top + " " + (x0 + r) + "," + top +
+          " L" + (x1 - r) + "," + top + " Q" + x1 + "," + top + " " + x1 + "," + (top + r) +
+          " L" + x1 + "," + baseY + " Z";
+        var tip = opts.tooltip ? opts.tooltip(i, c) : (cats[i] + ": " + c);
+        bars += '<g class="bar-seg"><title>' + esc(String(tip)) + '</title><path d="' + d + '" fill="url(#' + gid + ')"/></g>';
+        labelsSvg += '<text class="bar-val" x="' + cx + '" y="' + (top - 6) + '" text-anchor="middle">' + c + "</text>";
+      }
+    }
+
+    box.innerHTML =
+      '<svg class="barchart" viewBox="0 0 ' + W + " " + H + '" preserveAspectRatio="xMidYMid meet" role="img">' +
+      '<defs><linearGradient id="' + gid + '" x1="0" y1="0" x2="0" y2="1">' +
+      '<stop offset="0%" stop-color="var(--accent)"/><stop offset="100%" stop-color="var(--accent-2)"/></linearGradient></defs>' +
+      gridLines +
+      '<line class="axis-base" x1="' + padL + '" y1="' + baseY + '" x2="' + (W - padR) + '" y2="' + baseY + '"/>' +
+      bars + labelsSvg + "</svg>";
+  }
+
+  var WEEKDAY_SHORT = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
+  var WEEKDAY_FULL  = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"];
+  function weekdayCounts(list) {
     var counts = [0, 0, 0, 0, 0, 0, 0];
     (list || []).forEach(function (v) {
       var d = new Date(v.timestamp);
       if (isNaN(d.getTime())) return;
       counts[(d.getDay() + 6) % 7]++; // JS 0=Sun → Monday-first
     });
-    var total = counts.reduce(function (a, b) { return a + b; }, 0);
-    if (!total) { box.innerHTML = '<div class="empty">Sin check-ins en este rango</div>'; return; }
-    var max = Math.max.apply(null, counts.concat([1]));
-    box.innerHTML = '<div class="wd-bars">' + counts.map(function (c, i) {
-      var h = Math.max(3, Math.round((c / max) * 100));
-      return '<div class="wd-col" title="' + esc(labels[i]) + ': ' + c + ' check-in' + (c === 1 ? "" : "s") + '"><span class="wd-val">' + (c || "") + '</span>' +
-        '<span class="wd-bar" style="height:' + h + '%"></span>' +
-        '<span class="wd-lbl">' + labels[i] + '</span></div>';
-    }).join("") + '</div>';
+    return counts;
+  }
+
+  // Bars: check-ins by weekday (Monday-first), from the filtered recent list.
+  function renderWeekdayChart(list) {
+    var box = $("#chart-weekday");
+    if (!box) return;
+    renderBarsSVG(box, WEEKDAY_SHORT, weekdayCounts(list), {
+      emptyText: "Sin check-ins en este rango",
+      tooltip: function (i, c) { return WEEKDAY_FULL[i] + ": " + c + " check-in" + (c === 1 ? "" : "s"); },
+    });
   }
 
   // Filtered slice of the recent-visits list, per the dashboard filter bar.
@@ -791,44 +848,27 @@
       dots + xlabels + "</svg>";
   }
 
-  // 24 columns: check-ins by hour of the day (uses the same look as the weekday bars).
+  // 24 columns: check-ins by hour of the day (same shared bar-chart component).
   function renderHoursInto(sel, list) {
-    var box = $(sel);
-    if (!box) return;
     var counts = []; for (var i = 0; i < 24; i++) counts.push(0);
     list.forEach(function (v) {
       var d = new Date(v.timestamp);
       if (!isNaN(d.getTime())) counts[d.getHours()]++;
     });
-    var total = counts.reduce(function (a, b) { return a + b; }, 0);
-    if (!total) { box.innerHTML = '<div class="empty">Sin check-ins en este periodo</div>'; return; }
-    var max = Math.max.apply(null, counts.concat([1]));
-    box.innerHTML = '<div class="wd-bars hours">' + counts.map(function (c, h) {
-      var hgt = Math.max(3, Math.round((c / max) * 100));
-      return '<div class="wd-col"><span class="wd-val">' + (c || "") + '</span>' +
-        '<span class="wd-bar" style="height:' + hgt + '%"></span>' +
-        '<span class="wd-lbl">' + (h % 3 === 0 ? h : "") + '</span></div>';
-    }).join("") + '</div>';
+    var hourLabels = []; for (var h = 0; h < 24; h++) hourLabels.push(h);
+    renderBarsSVG(sel, hourLabels, counts, {
+      emptyText: "Sin check-ins en este periodo",
+      maxBarWidth: 16,
+      showLabel: function (i) { return i % 3 === 0; },
+      tooltip: function (i, c) { return i + ":00 – " + c + " check-in" + (c === 1 ? "" : "s"); },
+    });
   }
 
   function renderWeekdayInto(sel, list) {
-    var box = $(sel);
-    if (!box) return;
-    var labels = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
-    var counts = [0, 0, 0, 0, 0, 0, 0];
-    list.forEach(function (v) {
-      var d = new Date(v.timestamp);
-      if (!isNaN(d.getTime())) counts[(d.getDay() + 6) % 7]++;
+    renderBarsSVG(sel, WEEKDAY_SHORT, weekdayCounts(list), {
+      emptyText: "Sin check-ins en este periodo",
+      tooltip: function (i, c) { return WEEKDAY_FULL[i] + ": " + c + " check-in" + (c === 1 ? "" : "s"); },
     });
-    var total = counts.reduce(function (a, b) { return a + b; }, 0);
-    if (!total) { box.innerHTML = '<div class="empty">Sin check-ins en este periodo</div>'; return; }
-    var max = Math.max.apply(null, counts.concat([1]));
-    box.innerHTML = '<div class="wd-bars">' + counts.map(function (c, i) {
-      var h = Math.max(3, Math.round((c / max) * 100));
-      return '<div class="wd-col" title="' + esc(labels[i]) + ': ' + c + ' check-in' + (c === 1 ? "" : "s") + '"><span class="wd-val">' + (c || "") + '</span>' +
-        '<span class="wd-bar" style="height:' + h + '%"></span>' +
-        '<span class="wd-lbl">' + labels[i] + '</span></div>';
-    }).join("") + '</div>';
   }
 
   // Leaderboard with medals for the top three (holodBot-style "Рейтинг за активністю").
@@ -1025,6 +1065,14 @@
     startBtn.disabled = !configured;
     $("#bot-stop").classList.toggle("hidden", !on || !state.isAdmin);
     setBadge(on);
+
+    // Mirror the same status into the compact "Ajustes" summary card, if present.
+    var pill2 = $("#set-bot-pill");
+    if (pill2) { pill2.className = "pill " + (on ? "on" : "off"); pill2.textContent = on ? "en línea" : "apagado"; }
+    var st2 = $("#set-bot-status");
+    if (st2) st2.textContent = on
+      ? ("Bot @" + (s.username || "") + " activo, recibiendo check-ins.")
+      : (configured ? "Apagado. Enciéndelo en la pestaña Bot de Telegram." : "No configurado en el servidor (falta TELEGRAM_TOKEN).");
 
     // Worker self-enrolment deep-link (needs the running bot's @username + this company's code).
     var codeEl = $("#bot-code"); if (codeEl) codeEl.textContent = state.code || "—";
@@ -1309,6 +1357,48 @@
     finally { btn.disabled = false; }
   }
 
+  // ── Account (password change) ────────────────────────────────────────────────
+  async function changePassword() {
+    var cur = $("#acct-cur").value, n1 = $("#acct-new").value, n2 = $("#acct-new2").value;
+    if (!cur || !n1) { toast("Rellena la contraseña actual y la nueva.", true); return; }
+    if (n1 !== n2) { toast("Las contraseñas nuevas no coinciden.", true); return; }
+    if (n1.length < 6) { toast("La nueva contraseña debe tener al menos 6 caracteres.", true); return; }
+    var btn = $("#acct-pw-save"); btn.disabled = true;
+    try {
+      await api("/api/account/password", { method: "POST", body: JSON.stringify({ currentPassword: cur, newPassword: n1 }) });
+      toast("Contraseña actualizada");
+      $("#acct-cur").value = ""; $("#acct-new").value = ""; $("#acct-new2").value = "";
+    } catch (e) { toast(e.message, true); }
+    finally { btn.disabled = false; }
+  }
+
+  // ── Onboarding wizard (first-run guide; also reopenable from Ajustes) ────────
+  var OB_STEPS = [
+    { icon: "i-check", title: "Bienvenido a StarX", desc: "Te llevamos por los primeros pasos para dejar tu empresa lista para operar. Son solo un par de minutos." },
+    { icon: "i-import", title: "Importa tus puntos", desc: "Sube un Excel/CSV con tus paradas, o añádelas una a una. Sin coordenadas — se rellenan solas en el primer check-in.", action: { label: "Ir a Importar", view: "import" } },
+    { icon: "i-users", title: "Añade a tus trabajadores", desc: "Cárgalos con su teléfono. Se enlazan solos al compartir su número en el bot — sin contraseñas que gestionar.", action: { label: "Ir a Trabajadores", view: "workers" } },
+    { icon: "i-send", title: "Activa el check-in", desc: "Enciende el bot de Telegram, la app web (PWA), o ambos. Tus trabajadores fichan con GPS y foto en segundos.", action: { label: "Ir al Bot de Telegram", view: "bot" } },
+    { icon: "i-globe", title: "Conecta tu sistema (opcional)", desc: "En Ajustes → Conexiones tienes tu clave de API única para leer las visitas o cargar tu catálogo desde tu propio software.", action: { label: "Ir a Ajustes", view: "settings" } },
+  ];
+  var obIdx = 0;
+  function renderOnboard() {
+    var s = OB_STEPS[obIdx];
+    $("#ob-icon").innerHTML = '<svg class="ic"><use href="#' + s.icon + '"/></svg>';
+    $("#ob-title").textContent = s.title;
+    $("#ob-desc").textContent = s.desc;
+    $("#ob-dots").innerHTML = OB_STEPS.map(function (_, i) { return '<span class="ob-dot' + (i === obIdx ? " on" : "") + '"></span>'; }).join("");
+    $("#ob-back").classList.toggle("hidden", obIdx === 0);
+    var gotoBtn = $("#ob-goto");
+    if (s.action) { gotoBtn.classList.remove("hidden"); gotoBtn.textContent = s.action.label; }
+    else gotoBtn.classList.add("hidden");
+    $("#ob-next").textContent = (obIdx === OB_STEPS.length - 1) ? "Empezar" : "Siguiente";
+  }
+  function openOnboarding() { obIdx = 0; renderOnboard(); $("#onboard").classList.remove("hidden"); }
+  async function closeOnboarding(markSeen) {
+    $("#onboard").classList.add("hidden");
+    if (markSeen) { try { await api("/api/settings", { method: "POST", body: JSON.stringify({ onboardingSeen: true }) }); } catch (e) {} }
+  }
+
   // ── Wire up ──────────────────────────────────────────────────────────────────
   function applyAdmin() { $$(".admin-only").forEach(function (el) { el.classList.toggle("hidden", !state.isAdmin); }); }
 
@@ -1472,6 +1562,19 @@
     var photoBtn = $("#photo-toggle"); if (photoBtn) photoBtn.onclick = togglePhoto;
     var genBtn = $("#conn-key-gen"); if (genBtn) genBtn.onclick = generateConnectorKey;
     var cpyBtn = $("#conn-key-copy"); if (cpyBtn) cpyBtn.onclick = copyConnectorKey;
+    var goBotBtn = $("#set-bot-goto"); if (goBotBtn) goBotBtn.onclick = function () { showView("bot"); };
+    var pwSaveBtn = $("#acct-pw-save"); if (pwSaveBtn) pwSaveBtn.onclick = changePassword;
+    var obBtn = $("#settings-onboard-btn"); if (obBtn) obBtn.onclick = function () { openOnboarding(); };
+
+    // Onboarding wizard controls
+    $("#ob-skip").onclick = function () { closeOnboarding(true); };
+    $("#ob-back").onclick = function () { if (obIdx > 0) { obIdx--; renderOnboard(); } };
+    $("#ob-next").onclick = function () { if (obIdx < OB_STEPS.length - 1) { obIdx++; renderOnboard(); } else closeOnboarding(true); };
+    $("#ob-goto").onclick = function () {
+      var s = OB_STEPS[obIdx];
+      closeOnboarding(true);
+      if (s.action) showView(s.action.view);
+    };
 
     // Import
     $("#imp-target").onchange = renderMapping;
@@ -1505,6 +1608,12 @@
       $("#company").textContent = me.company ? "· " + me.company : "";
       $("#user").textContent = me.name || "";
       state.role = me.role; state.isAdmin = me.role === "admin"; state.code = me.code || "";
+      state.isDefaultTenant = !!me.isDefaultTenant;
+      var acctCo = $("#acct-company"); if (acctCo) acctCo.textContent = me.company || "—";
+      // The env-configured "default" tenant's password lives in PLATFORM_PASSWORD, not the
+      // DB, so changing it here would be silently lost on the next restart — lock the form.
+      var pwWrap = $("#acct-pw-wrap"), pwLocked = $("#acct-pw-locked");
+      if (pwWrap && pwLocked) { pwWrap.classList.toggle("hidden", state.isDefaultTenant); pwLocked.classList.toggle("hidden", !state.isDefaultTenant); }
     } catch (e) { /* api() already redirects on 401 */ }
     applyAdmin();
 
@@ -1515,6 +1624,12 @@
       if (hello && state.role) hello.textContent = "Hola" + ($("#user").textContent ? ", " + $("#user").textContent : "") + ". Elige tu parada, comparte tu ubicación y añade una foto.";
       showView("checkin");
       return;
+    }
+
+    // First-run guide: show automatically once per company, for an admin, until they
+    // skip or finish it (also reopenable anytime from Ajustes).
+    if (state.isAdmin) {
+      try { var ob = await api("/api/settings"); if (!ob.onboardingSeen) openOnboarding(); } catch (e) {}
     }
 
     loadDashboard();

@@ -163,6 +163,7 @@ async function update(id, patch) {
     if (patch.subscriptionStatus != null) dbPatch.subscription_status = patch.subscriptionStatus;
     if (patch.stripeCustomerId != null) dbPatch.stripe_customer_id = patch.stripeCustomerId;
     if (patch.trialEndsAt !== undefined) dbPatch.trial_ends_at = patch.trialEndsAt;
+    if (patch.passwordHash != null) dbPatch.password_hash = patch.passwordHash;
     if (Object.keys(dbPatch).length) {
       const { error } = await db.from("starx_tenants").update(dbPatch).eq("id", id);
       if (error) throw new Error(error.message || String(error));
