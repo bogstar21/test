@@ -17,8 +17,8 @@
     .box { width:100%; max-width:390px; padding:32px; background:var(--card);
       border:1px solid var(--line); border-radius:22px;
       box-shadow: 0 30px 80px -50px rgba(0,0,0,.35); }
-    .brand { font-size:28px; font-weight:800; letter-spacing:-.03em; margin:0 0 4px; color:var(--ink); }
-    .sub { color:var(--dim); margin:0 0 24px; font-size:14px; }
+    .brand { font-size:28px; font-weight:800; letter-spacing:-.03em; margin:0 0 4px; color:var(--ink); text-align:center; }
+    .sub { color:var(--dim); margin:0 0 24px; font-size:14px; text-align:center; }
     label { display:block; font-size:12px; color:var(--dim); margin:0 0 6px; font-weight:500; }
     input { width:100%; padding:12px 14px; border-radius:12px; border:1px solid var(--line-2);
       background:#fbfaf6; color:var(--ink); font-size:15px; transition:border-color .14s, box-shadow .14s, background .14s; }
@@ -106,7 +106,7 @@
     </form>
   </div>
 
-  <script src="/platform/assets/i18n.js?v=21"></script>
+  <script src="/platform/assets/i18n.js?v=22"></script>
   <script>
     var p = new URLSearchParams(location.search);
     if (p.get("e")) document.getElementById("err").style.display = "block";

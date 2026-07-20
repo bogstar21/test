@@ -306,8 +306,13 @@ a:hover { text-decoration: underline; }
 .donut-legend b { color: var(--strong); }
 .wd-bars { display: flex; align-items: flex-end; gap: 10px; width: 100%; height: 168px; padding-top: 6px; }
 .wd-col { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; gap: 5px; }
+.wd-col { cursor: default; }
 .wd-col .wd-val { font-size: 11px; font-weight: 600; color: var(--strong); min-height: 13px; }
-.wd-col .wd-bar { width: 100%; max-width: 34px; border-radius: 7px 7px 0 0; background: var(--grad); min-height: 3px; }
+.wd-col .wd-bar { width: 100%; max-width: 34px; border-radius: 8px 8px 0 0; min-height: 3px;
+  background: linear-gradient(180deg, var(--accent), var(--accent-2));
+  transition: filter .14s ease, box-shadow .14s ease; }
+.wd-col:hover .wd-bar { filter: brightness(1.1); box-shadow: 0 6px 16px -8px var(--accent); }
+.wd-col:hover .wd-val { color: var(--accent); }
 .wd-col .wd-lbl { font-size: 11px; color: var(--faint); }
 .map-legend { background: var(--bar-bg); border: 1px solid var(--border); border-radius: 8px; padding: 6px 9px; font-size: 12px; color: var(--dim); display: flex; gap: 12px; backdrop-filter: blur(6px); }
 .map-legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 5px; vertical-align: middle; }
@@ -315,9 +320,19 @@ a:hover { text-decoration: underline; }
 .barlist { display: flex; flex-direction: column; gap: 11px; }
 .barlist .bl-row { display: grid; grid-template-columns: 120px 1fr 42px; align-items: center; gap: 12px; }
 .barlist .bl-name { font-size: 12.5px; color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.barlist .bl-row { border-radius: 8px; padding: 3px 4px; margin: 0 -4px; transition: background .14s ease; cursor: default; }
+.barlist .bl-row:hover { background: var(--glass-2); }
 .barlist .bl-track { height: 10px; border-radius: 999px; background: var(--glass-strong); overflow: hidden; }
-.barlist .bl-fill { height: 100%; border-radius: 999px; background: var(--grad); }
+.barlist .bl-fill { height: 100%; border-radius: 999px; background: linear-gradient(90deg, var(--accent-2), var(--accent)); transition: filter .14s ease; }
+.barlist .bl-row:hover .bl-fill { filter: brightness(1.08); }
 .barlist .bl-val { font-size: 12.5px; color: var(--strong); font-weight: 600; text-align: right; }
+/* Chart interactivity: hover-dim the non-hovered donut segment, enlarge line dots. */
+.donut-seg { transition: opacity .14s ease; cursor: default; }
+.donut-wrap:hover .donut-seg { opacity: .5; }
+.donut-wrap .donut-seg:hover { opacity: 1; }
+.chart .pt-dot { transition: r .12s ease; cursor: default; }
+.chart svg:hover .pt-dot { r: 2.6; }
+.chart .pt-dot:hover { r: 5.5; }
 
 /* ── Tables ────────────────────────────────────────────────────────────── */
 .table-wrap {

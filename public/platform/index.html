@@ -8,7 +8,7 @@
   <link rel="icon" href="/platform/assets/icon.svg">
   <link rel="manifest" href="/platform/manifest.webmanifest">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-  <link rel="stylesheet" href="/platform/assets/app.css?v=21">
+  <link rel="stylesheet" href="/platform/assets/app.css?v=22">
   <script>
     // Apply theme before first paint. Light (warm paper) is the default; only an explicit 'dark' opts in.
     (function () { try { if (localStorage.getItem('starx-theme') === 'dark') document.documentElement.classList.add('dark'); } catch (e) {} })();
@@ -334,7 +334,7 @@
           <p class="muted" id="bill-hint" style="margin-top:8px"></p>
         </div>
 
-        <div class="card card-pad">
+        <div class="card card-pad mt">
           <h3><svg class="ic"><use href="#i-import"/></svg> Importar desde Excel / CSV</h3>
           <p class="desc">Sube un archivo <b>.xlsx / .xls / .csv</b> con tus puntos o trabajadores. Te dejamos asignar cada columna antes de importar.</p>
           <div class="field">
@@ -520,7 +520,7 @@
   <div class="toast" id="toast"></div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script src="/platform/assets/i18n.js?v=21"></script>
-  <script src="/platform/assets/app.js?v=21"></script>
+  <script src="/platform/assets/i18n.js?v=22"></script>
+  <script src="/platform/assets/app.js?v=22"></script>
 </body>
 </html>

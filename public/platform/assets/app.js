@@ -165,7 +165,7 @@
     var max = entries[0][1] || 1;
     el.innerHTML = entries.map(function (e) {
       var pct = Math.max(4, Math.round((e[1] / max) * 100));
-      return '<div class="bl-row"><span class="bl-name">' + esc(e[0]) + '</span>' +
+      return '<div class="bl-row" title="' + esc(e[0]) + ': ' + e[1] + '"><span class="bl-name">' + esc(e[0]) + '</span>' +
         '<span class="bl-track"><span class="bl-fill" style="width:' + pct + '%"></span></span>' +
         '<span class="bl-val">' + e[1] + "</span></div>";
     }).join("");
@@ -203,7 +203,10 @@
     }
     var linePts = vals.map(function (val, i) { return x(i) + "," + y(val); }).join(" ");
     var areaPts = padL + "," + (padT + ih) + " " + linePts + " " + (W - padR) + "," + (padT + ih);
-    var dots = vals.map(function (val, i) { return '<circle cx="' + x(i) + '" cy="' + y(val) + '" r="3" fill="#e04a2d"/>'; }).join("");
+    var dots = vals.map(function (val, i) {
+      return '<circle class="pt-dot" cx="' + x(i) + '" cy="' + y(val) + '" r="3.4" fill="#e04a2d">' +
+        '<title>' + esc(labels[i].key) + ' · ' + val + ' check-in' + (val === 1 ? "" : "s") + '</title></circle>';
+    }).join("");
     var xlabels = labels.map(function (l, i) {
       if (i % 2 !== 0 && i !== labels.length - 1) return "";
       return '<text class="axis-lbl" x="' + x(i) + '" y="' + (H - 6) + '" text-anchor="middle">' + esc(l.short) + "</text>";
@@ -234,16 +237,16 @@
     var total = counts.bot + counts.pwa;
     if (!total) { box.innerHTML = '<div class="empty">Sin check-ins en este rango</div>'; return; }
     var r = 52, C = 2 * Math.PI * r, cx = 70, cy = 70, f1 = counts.bot / total;
-    var seg = function (color, frac, offsetFrac) {
-      return '<circle cx="' + cx + '" cy="' + cy + '" r="' + r + '" fill="none" stroke="' + color +
+    var seg = function (color, frac, offsetFrac, label, count) {
+      return '<circle class="donut-seg" cx="' + cx + '" cy="' + cy + '" r="' + r + '" fill="none" stroke="' + color +
         '" stroke-width="18" stroke-dasharray="' + (frac * C) + ' ' + C + '" stroke-dashoffset="' + (-offsetFrac * C) +
-        '" transform="rotate(-90 ' + cx + ' ' + cy + ')"/>';
+        '" transform="rotate(-90 ' + cx + ' ' + cy + ')"><title>' + label + ': ' + count + ' (' + Math.round(frac * 100) + '%)</title></circle>';
     };
     box.innerHTML =
       '<div class="donut-wrap">' +
       '<svg viewBox="0 0 140 140" width="132" height="132" role="img">' +
       '<circle cx="' + cx + '" cy="' + cy + '" r="' + r + '" fill="none" stroke="var(--glass-2)" stroke-width="18"/>' +
-      seg("#e04a2d", f1, 0) + seg("#22c55e", counts.pwa / total, f1) +
+      seg("#e04a2d", f1, 0, "Bot", counts.bot) + seg("#22c55e", counts.pwa / total, f1, "App", counts.pwa) +
       '<text x="' + cx + '" y="' + (cy - 1) + '" text-anchor="middle" font-size="26" font-weight="700" fill="var(--strong)">' + total + '</text>' +
       '<text x="' + cx + '" y="' + (cy + 16) + '" text-anchor="middle" font-size="11" fill="var(--faint)">check-ins</text>' +
       '</svg>' +
@@ -269,7 +272,7 @@
     var max = Math.max.apply(null, counts.concat([1]));
     box.innerHTML = '<div class="wd-bars">' + counts.map(function (c, i) {
       var h = Math.max(3, Math.round((c / max) * 100));
-      return '<div class="wd-col"><span class="wd-val">' + (c || "") + '</span>' +
+      return '<div class="wd-col" title="' + esc(labels[i]) + ': ' + c + ' check-in' + (c === 1 ? "" : "s") + '"><span class="wd-val">' + (c || "") + '</span>' +
         '<span class="wd-bar" style="height:' + h + '%"></span>' +
         '<span class="wd-lbl">' + labels[i] + '</span></div>';
     }).join("") + '</div>';
@@ -540,16 +543,48 @@
     wrap.innerHTML = skeleton();
     loadPendingContacts();
     try {
-      var data = await api("/api/workers");
+      // Pull points + stats alongside workers so each row can show real activity, not just IDs.
+      var res = await Promise.all([
+        api("/api/workers"),
+        api("/api/points").catch(function () { return { points: [] }; }),
+        api("/api/stats").catch(function () { return {}; }),
+      ]);
+      var data = res[0], points = res[1].points || [], stats = res[2] || {};
       state.workers = data.workers;
       if (!data.workers.length) { wrap.innerHTML = '<div class="card card-pad"><div class="empty">Aún no hay trabajadores. Añade uno o importa desde Excel.</div></div>'; return; }
       var rows = data.workers.filter(workerMatches);
       if (!rows.length) { wrap.innerHTML = '<div class="card card-pad"><div class="empty">Ningún trabajador coincide con la búsqueda.</div></div>'; return; }
-      var heads = ["Nombre", "ID interno", "ID de Telegram", "Teléfono", "Estado"];
+
+      // Per-worker aggregates.
+      var assignedByWid = {};
+      points.forEach(function (p) { if (p.active !== false && p.workerId) assignedByWid[p.workerId] = (assignedByWid[p.workerId] || 0) + 1; });
+      var covByWid = {}; (stats.coverage || []).forEach(function (c) { covByWid[c.workerId] = c; });
+      var byWorker = stats.byWorker || {};
+      var lastByKey = {};
+      (stats.recent || []).forEach(function (v) {
+        [v.workerId, v.workerName, v.workerTelegramId].forEach(function (k) {
+          if (k && (!lastByKey[k] || String(v.timestamp) > String(lastByKey[k]))) lastByKey[k] = v.timestamp;
+        });
+      });
+
+      var heads = ["Nombre", "Teléfono", "Paradas (hoy)", "Check-ins", "Último check-in", "Estado"];
       if (state.isAdmin) heads.push("Acciones");
       wrap.innerHTML = tableWrap(heads, rows.map(function (w) {
-        var wid = w.workerId ? esc(w.workerId) : '<span class="muted">—</span>';
-        return '<tr><td data-label="Nombre">' + esc(w.name) + '</td><td data-label="ID interno" class="mono">' + wid + '</td><td data-label="ID de Telegram" class="mono">' + esc(w.telegramId) + '</td><td data-label="Teléfono">' + esc(w.phone) + '</td><td data-label="Estado">' + statusPill(w.active) + "</td>" +
+        var cov = covByWid[w.workerId];
+        var assigned = cov ? cov.assigned : (assignedByWid[w.workerId] || 0);
+        var doneToday = cov ? cov.visitedToday : 0;
+        var total = byWorker[w.name] || 0;
+        var last = lastByKey[w.workerId] || lastByKey[w.name] || lastByKey[w.telegramId] || "";
+        var assignedCell = assigned
+          ? '<b>' + doneToday + '</b><span class="muted">/' + assigned + '</span>'
+          : '<span class="muted">— sin asignar —</span>';
+        var lastCell = last ? fmtTime(last) : '<span class="muted">nunca</span>';
+        return '<tr><td data-label="Nombre">' + esc(w.name) + (w.telegramId ? '' : ' <span class="pill off" title="Aún no ha abierto el bot">sin Telegram</span>') + '</td>' +
+          '<td data-label="Teléfono">' + esc(w.phone) + '</td>' +
+          '<td data-label="Paradas (hoy)" title="Paradas hechas hoy / asignadas">' + assignedCell + '</td>' +
+          '<td data-label="Check-ins">' + total + '</td>' +
+          '<td data-label="Último check-in" class="muted">' + lastCell + '</td>' +
+          '<td data-label="Estado">' + statusPill(w.active) + "</td>" +
           (state.isAdmin ? '<td data-label="Acciones"><div class="tbl-actions"><button class="btn ghost sm" data-edit-worker="' + w.row + '">Editar</button><button class="btn danger sm" data-del-worker="' + w.row + '">Borrar</button></div></td>' : "") +
           "</tr>";
       }).join(""), true);
@@ -790,7 +825,7 @@
     var max = Math.max.apply(null, counts.concat([1]));
     box.innerHTML = '<div class="wd-bars">' + counts.map(function (c, i) {
       var h = Math.max(3, Math.round((c / max) * 100));
-      return '<div class="wd-col"><span class="wd-val">' + (c || "") + '</span>' +
+      return '<div class="wd-col" title="' + esc(labels[i]) + ': ' + c + ' check-in' + (c === 1 ? "" : "s") + '"><span class="wd-val">' + (c || "") + '</span>' +
         '<span class="wd-bar" style="height:' + h + '%"></span>' +
         '<span class="wd-lbl">' + labels[i] + '</span></div>';
     }).join("") + '</div>';
