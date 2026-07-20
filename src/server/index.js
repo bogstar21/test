@@ -19,6 +19,7 @@ const { mountConnectRoutes }  = require("./routes/connect");
 const { mountCheckinRoutes }  = require("./routes/checkin");
 const { mountBillingRoutes }  = require("./routes/billing");
 const { mountBotRoutes }      = require("./routes/bot");
+const { mountAdminRoutes }    = require("./routes/admin");
 
 function createApp(deps = {}) {
   const app = express();
@@ -99,6 +100,9 @@ function createApp(deps = {}) {
   mountCheckinRoutes(app);      // /api/checkin (worker PWA)
   mountBillingRoutes(app);      // /api/billing/* (Stripe subscription — optional)
   mountBotRoutes(app);          // /api/bot/status, /start, /stop
+  // Unlisted operator tool — never linked from the landing/app nav, own password gate
+  // (PLATFORM_PASSWORD only, not a company session). Reachable only by typing the URL.
+  mountAdminRoutes(app);        // /admin/analytics
   mountPublicRoutes(app, deps); // /health, /
 
   app.use((_req, res) => res.status(404).type("text/plain").send("Not found"));

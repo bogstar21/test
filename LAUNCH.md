@@ -4,58 +4,90 @@ Field check-in platform: companies bring their points + workers; workers check i
 GPS + photo from a Telegram bot or the PWA; managers watch it live and pull the data out.
 Multi-tenant, self-serve signup, Stripe billing.
 
-This plan is organised in three tracks. Each idea is scoped small enough to ship on its
-own. Rough priority within each track is top-to-bottom.
+Last updated: 2026-07-20.
 
 ---
 
-## 1. Security
+## ✅ Done
 
-1. **Postgres RLS as defense-in-depth.** Today isolation is enforced in the app layer
-   (`tenant_id` filters). Add Row-Level Security policies on `starx_workers/points/visits/
-   settings` keyed on `tenant_id` so a query bug can never leak across companies. The
-   service-role key bypasses RLS, so pair it with a per-request tenant claim.
-2. **Real accounts on signup.** Signup is company-name + password only. Add an email,
-   verification link, and a password-reset flow. Without email there's no account recovery
-   and no way to contact a paying customer.
-3. **CSRF protection on state-changing requests.** Sessions are `sameSite=lax` cookies;
-   the login/import forms POST directly. Add a CSRF token (or require `fetch` + custom
-   header on all mutations) so a third-party page can't act as a logged-in manager.
-4. **Private photo storage.** The `visit-photos` bucket is public-read. Switch to a private
-   bucket with short-lived signed URLs minted per request, so check-in photos aren't
-   guessable/enumerable outside the platform.
-5. **Webhook + audit hardening.** Add a timestamp tolerance + idempotency key to the Stripe
-   webhook (replay protection), and an admin audit log (who deleted/edited what, when) —
-   both are table-stakes when money and multi-user data are involved.
+**Security**
+- Multi-tenant isolation: every write/delete/link scoped by `tenant_id` (no cross-tenant
+  IDOR); Postgres RLS enabled as defense-in-depth; login scoped by company code + password.
+- CSRF defense (Origin/host check on state-changing `/api` requests) + a per-tenant audit
+  log of admin actions.
+- Private photo storage (signed proxy, not a public bucket); Stripe webhook has replay
+  protection (timestamp tolerance + event idempotency).
+- Signup/login/worker-login rate-limited.
+- Email + password reset: signup requires a real email (stored, used for account recovery);
+  `/auth/forgot` → `/auth/reset` flow, enumeration-safe; zero-dep email module (Resend).
+- Terms of Service + Privacy Policy pages, required checkbox at signup.
+- Structured logging (`logger.js`) + global crash handlers + catch-all Express error
+  middleware + optional webhook alerting (`ERROR_WEBHOOK_URL`).
+- Platform-wide analytics at `/admin/analytics` — gated by `PLATFORM_PASSWORD` only, its
+  own signed cookie (separate from tenant sessions), unlisted (no nav/landing link).
 
-## 2. Design
+**Design**
+- Full redesign: warm-paper light theme, coral accent, new cube+arrow logo everywhere
+  (favicon included). Dark mode kept.
+- Onboarding wizard: 5-step animated first-run guide, auto-shown once per company,
+  reopenable from Ajustes.
+- Settings reorganised: **Ajustes** (account/password, full Bot control, PWA, check-in
+  rules, billing) vs **Conexiones** (Excel import, API connector, Google Sheets) — matches
+  how the two are actually used, not how they happened to get built.
+- Dashboard: real interactive charts (SVG, gradient fill, hover tooltips) replacing the old
+  div/pill bars; filters (worker/source/date); colored map markers.
+- Data export: full company data (points/workers/visits) as one JSON download.
+- Mobile bugs root-caused and fixed: bot-badge text wrap, code-block horizontal overflow
+  (both were real CSS bugs, not cosmetic guesses).
+- Logo/back navigation everywhere (landing, login, platform topbar all navigate home).
 
-1. **First-run onboarding wizard.** After signup, walk the manager through: import points →
-   add/importar workers → assign → generate API key / turn on bot or PWA. Right now they
-   land on an empty dashboard and have to discover each tab.
-2. **Worker PWA polish ("today's route").** Big single-tap check-in, stops sorted
-   nearest-first (GPS already captured), a clear "done today" state, and offline-friendly
-   affordances. This is the screen used most, in the field, one-handed.
-3. **Empty states + loading skeletons.** Every table/chart should have a helpful empty state
-   ("No points yet — import a file or add one") and skeletons instead of "Cargando…". Makes
-   the product feel finished on day one when there's no data.
-4. **Design-token cleanup + dark-mode QA.** The palette now lives in CSS variables; finish
-   the job by removing the remaining hardcoded hexes (charts, login/landing) and doing a
-   full light/dark contrast + focus-state pass (accessibility).
-5. **Consistent brand system.** One documented logo (the cube+arrow), favicon set, and a
-   small component reference so future screens stay on-brand.
+**Functionality**
+- Worker PWA enriched: personal stats (today/week/total/streak), assigned-points list with
+  status, personal recent-check-ins log — was a bare form before.
+- Geofence enforcement (per-deployment `GEOFENCE_METERS`), photo-required toggle.
+- Bot point search (`🔍 Buscar parada`) instead of scrolling dozens of buttons.
+- i18n: EN/ES/UK dictionary covers nav, static labels, and everything built this session
+  (~50 entries added) — **partially done, see Next Up**.
 
-## 3. Functionality
+---
 
-1. **Routes / ordering (the deferred feature).** A daily, ordered sequence of stops per
-   worker — the single most-requested logistics capability and a natural upsell tier.
-2. **Geofence enforcement (per-company toggle).** Optionally reject a check-in if it's more
-   than N metres from the point. Turns "proof of GPS" into "proof of presence" — a real
-   selling point for auditing.
-3. **Notifications.** Telegram daily "here's your route" push to workers, and manager alerts
-   for missed/pending stops at end of day. Drives daily engagement without opening the app.
-4. **Reporting & scheduled exports.** Per-worker productivity, coverage over time, and a
-   scheduled email/CSV digest. Managers want the summary, not just the raw log.
-5. **Roles beyond admin.** A read-only supervisor and a dispatcher role (assign, no billing).
-   Bigger companies won't share one admin password — and it complements the code+password
-   login already in place.
+## 🔜 Next up (in order)
+
+1. **Finish i18n.** The translation system auto-translates any *exact-match static string*
+   via a dictionary — that part works well. What's still mixed: toasts and messages built
+   by string concatenation (`"Analizadas " + n + " filas"`), which can never exact-match a
+   dictionary key. Needs a pass through `app.js` splitting each dynamic message into a
+   translatable static fragment + the interpolated value, one call site at a time.
+2. **Full QA cycle.** Not another quick look — a real pass covering:
+   - End to end: signup (real email) → login by code → import Excel → assign points →
+     turn on bot → check in via bot **and** PWA → verify on dashboard/stats → export data.
+   - All three roles: admin, worker (PWA), and the connector API with a real generated key.
+   - All three languages, on the actual views (not just nav labels).
+   - A real phone, not just the emulator.
+   - Stripe checkout → webhook → plan upgrade, end to end, in test mode.
+   - Password reset end to end with a real email arriving.
+3. **Fix whatever the QA cycle finds.**
+
+## 🗺️ After that — roadmap ideas
+
+**Trust / ops**
+- Per-tenant (not just per-IP) rate limiting on the `/api/v1` connector.
+- A defined dunning policy for `past_due` subscriptions (grace period, reminder emails)
+  beyond just flipping to read-only.
+- Product-usage analytics for *you* (active companies/day, check-ins/day trend) — the new
+  `/admin/analytics` page is the seed of this; extend it with a trend chart, not just
+  today's snapshot.
+- Confirm Supabase automated backups are on (ops checklist, not code).
+
+**Functionality**
+- Routes/ordering — an ordered daily sequence of stops per worker (the single most-asked
+  logistics feature; natural upsell tier).
+- Notifications — Telegram daily "here's your route" push; manager alert for missed stops
+  at end of day.
+- Scheduled report emails (needs the email infra already built — natural follow-on).
+- Roles beyond admin/worker — a read-only supervisor, a dispatcher (assign, no billing).
+
+**Design**
+- Empty states + loading skeletons everywhere data can be zero (currently just "Cargando…").
+- A short documented component/brand reference so new screens stay consistent without
+  re-deriving the design system each time.

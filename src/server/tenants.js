@@ -109,6 +109,7 @@ function rowToTenant(r) {
     trialEndsAt: r.trial_ends_at || null,
     stripeCustomerId: String(r.stripe_customer_id || ""),
     active: r.active !== false,
+    createdAt: r.created_at || null,
   };
 }
 
