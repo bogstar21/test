@@ -3,8 +3,8 @@
   "short_name": "StarX",
   "start_url": "/platform",
   "display": "standalone",
-  "background_color": "#000000",
-  "theme_color": "#000000",
+  "background_color": "#f3f0e9",
+  "theme_color": "#f3f0e9",
   "icons": [
     { "src": "/platform/assets/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
   ]

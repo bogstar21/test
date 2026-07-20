@@ -35,10 +35,11 @@
       padding:10px 12px; border-radius:12px; font-size:13px; margin-bottom:16px; }
     .codebox { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:18px; font-weight:700;
       padding:12px; border-radius:12px; background:#f2efe7; border:1px solid var(--line-2); text-align:center; letter-spacing:.02em; }
-    .tabs { display:flex; gap:6px; margin:0 0 20px; padding:4px; border-radius:13px;
+    .tabs { display:flex; align-items:stretch; gap:6px; margin:0 0 20px; padding:4px; border-radius:13px;
       border:1px solid var(--line); background:#f2efe7; }
-    .tab { flex:1; padding:9px; border-radius:9px; border:0; background:transparent; color:var(--dim);
-      font:inherit; font-size:13.5px; font-weight:600; cursor:pointer; transition:background .14s, color .14s; }
+    .tab { flex:1 1 0; display:flex; align-items:center; justify-content:center; text-align:center; white-space:nowrap;
+      padding:9px 6px; border-radius:9px; border:0; background:transparent; color:var(--dim);
+      font:inherit; font-size:13px; font-weight:600; cursor:pointer; transition:background .14s, color .14s; }
     .tab.on { background:var(--card); color:var(--ink); box-shadow:0 1px 3px rgba(0,0,0,.08); }
     .hide { display:none; }
     .langsw { position:fixed; top:16px; right:16px; display:inline-flex; padding:3px; gap:2px; border-radius:10px;
