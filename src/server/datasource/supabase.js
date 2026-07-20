@@ -88,11 +88,13 @@ function makeSupabaseSource(tenant) {
       active: f.active !== false,
     };
     if (str(f.workerId).trim()) patch.worker_id = str(f.workerId).trim();
-    const { error } = await db().from(T_WORKERS).update(patch).eq("pk", row);
+    // Scope by tenant: pk is a GLOBAL identity, so without this a tenant could edit
+    // another company's row by guessing its pk (cross-tenant IDOR).
+    const { error } = await db().from(T_WORKERS).update(patch).eq("pk", row).eq("tenant_id", tenantId);
     ok(error);
   }
   async function deleteWorker(row) {
-    const { error, count } = await db().from(T_WORKERS).delete({ count: "exact" }).eq("pk", row);
+    const { error, count } = await db().from(T_WORKERS).delete({ count: "exact" }).eq("pk", row).eq("tenant_id", tenantId);
     ok(error);
     return count || 0;
   }
@@ -124,9 +126,9 @@ function makeSupabaseSource(tenant) {
   async function linkWorkerTelegram(row, telegramId) {
     const patch = { telegram_id: str(telegramId).trim() };
     // Backfill a worker_id if this row predates the column.
-    const { data } = await db().from(T_WORKERS).select("worker_id").eq("pk", row).limit(1);
+    const { data } = await db().from(T_WORKERS).select("worker_id").eq("pk", row).eq("tenant_id", tenantId).limit(1);
     if (!(data && data[0] && str(data[0].worker_id).trim())) patch.worker_id = newWorkerId();
-    const { error } = await db().from(T_WORKERS).update(patch).eq("pk", row);
+    const { error } = await db().from(T_WORKERS).update(patch).eq("pk", row).eq("tenant_id", tenantId);
     ok(error);
     return true;
   }
@@ -190,7 +192,7 @@ function makeSupabaseSource(tenant) {
     } else if (ref != null) {
       patch.worker_id = ""; patch.worker_name = "";
     }
-    const { error } = await db().from(T_POINTS).update(patch).eq("pk", row);
+    const { error } = await db().from(T_POINTS).update(patch).eq("pk", row).eq("tenant_id", tenantId);
     ok(error);
   }
   // Clear the assignment on every point that belonged to a worker (used when a worker
@@ -219,7 +221,7 @@ function makeSupabaseSource(tenant) {
     return true;
   }
   async function deletePoint(row) {
-    const { error, count } = await db().from(T_POINTS).delete({ count: "exact" }).eq("pk", row);
+    const { error, count } = await db().from(T_POINTS).delete({ count: "exact" }).eq("pk", row).eq("tenant_id", tenantId);
     ok(error);
     return count || 0;
   }

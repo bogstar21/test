@@ -1,11 +1,11 @@
-/* LogiFlow i18n — runtime translation for the whole platform (ES source → EN / UK).
+/* StarX i18n — runtime translation for the whole platform (ES source → EN / UK).
  *
  * Strategy: the app is authored in Spanish. This layer translates by SOURCE STRING:
  *  - a MutationObserver watches the DOM, so anything app.js renders (tables, toasts,
  *    modals, empty states…) is translated automatically — no per-string wiring needed;
  *  - elements with data-i18n="key" get their innerHTML replaced (for rich text with <b>);
  *  - LF.t(es) translates transient strings (confirm dialogs, interpolated toasts).
- * Language is persisted in localStorage("logiflow-lang"), shared with the landing page.
+ * Language is persisted in localStorage("starx-lang"), shared with the landing page.
  */
 (function () {
   "use strict";
@@ -255,7 +255,7 @@
   var LANGS = { es: 0, en: 1, uk: 2 };
   var lang = "es";
   try {
-    var saved = localStorage.getItem("logiflow-lang");
+    var saved = localStorage.getItem("starx-lang");
     var nav = (navigator.language || "es").slice(0, 2);
     lang = saved || (LANGS[nav] != null ? nav : "es");
   } catch (e) {}
@@ -312,7 +312,7 @@
   function setLang(l) {
     if (!(l in LANGS)) return;
     lang = l;
-    try { localStorage.setItem("logiflow-lang", l); } catch (e) {}
+    try { localStorage.setItem("starx-lang", l); } catch (e) {}
     document.documentElement.lang = l;
     document.querySelectorAll("[data-lang-btn]").forEach(function (b) {
       b.classList.toggle("on", b.getAttribute("data-lang-btn") === l);

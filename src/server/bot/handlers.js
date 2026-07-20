@@ -1,4 +1,4 @@
-// LogiFlow check-in flow — the Telegram handlers, decoupled from how the bot is started.
+// StarX check-in flow — the Telegram handlers, decoupled from how the bot is started.
 //
 // This module knows nothing about tokens or polling. It takes a live `bot` instance
 // and wires the whole worker flow onto it:
@@ -90,7 +90,7 @@ function attachHandlers(bot) {
   function askForContact(chatId, company) {
     const who = company ? ` de *${esc(company)}*` : "";
     return bot.sendMessage(chatId,
-      `👋 Bienvenido a *LogiFlow*${who}.\n\nPara registrarte, comparte tu número de teléfono con el botón de abajo y te enlazaré con tu perfil.`,
+      `👋 Bienvenido a *StarX*${who}.\n\nPara registrarte, comparte tu número de teléfono con el botón de abajo y te enlazaré con tu perfil.`,
       { parse_mode: "Markdown", reply_markup: contactKb });
   }
 

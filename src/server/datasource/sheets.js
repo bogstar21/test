@@ -1,4 +1,4 @@
-// Google Sheets datasource. ALL sheet structure + I/O for the three LogiFlow entities
+// Google Sheets datasource. ALL sheet structure + I/O for the three StarX entities
 // (workers, points, visits) lives here, behind a small interface. The routes and the
 // bot never touch Google directly — they call this. That's the seam that lets us add
 // datasource/api.js or datasource/postgres.js later without changing anything else.

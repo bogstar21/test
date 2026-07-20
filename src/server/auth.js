@@ -183,20 +183,27 @@ function safeEqual(a, b) {
   return crypto.timingSafeEqual(ab, bb);
 }
 
-// Match a login password against every company (plaintext env default OR scrypt hash).
-function matchTenant(pw) {
+// Resolve the company to log into. With a company code we check ONLY that tenant's
+// password. Without a code we check ONLY the env/default tenant (single-company,
+// self-hosted). We must NOT scan every tenant by password: two companies could share a
+// password and a user would land in the wrong account (cross-tenant login).
+function matchTenant(code, pw) {
   if (!pw) return null;
-  for (const t of config.allTenants()) {
-    if (config.tenants.verifyPassword(t, pw)) return t;
+  code = String(code || "").trim().toLowerCase();
+  if (code) {
+    const t = config.tenants.byCode(code);
+    return (t && config.tenants.verifyPassword(t, pw)) ? t : null;
   }
-  return null;
+  const d = config.defaultTenant();
+  return (d && config.tenants.verifyPassword(d, pw)) ? d : null;
 }
 
 function mountAuthRoutes(app) {
   app.post("/auth/login", (req, res) => {
     if (!passwordConfigured()) return res.status(503).type("html").send(notConfiguredPage());
     const pw     = (req.body && req.body.password) || "";
-    const tenant = matchTenant(pw);
+    const code   = (req.body && req.body.code) || "";
+    const tenant = matchTenant(code, pw);
     const next_  = safeNext(req.query.next || (req.body && req.body.next));
     if (!tenant) return res.redirect("/platform/login?e=1" + (next_ ? "&next=" + encodeURIComponent(next_) : ""));
     setSessionCookie(res, {
@@ -274,7 +281,7 @@ function mountAuthRoutes(app) {
 // ─── Tiny inline "not configured" page (no external assets) ─────────────────────
 function notConfiguredPage() {
   return '<!doctype html><html lang="en"><head><meta charset="utf-8">' +
-    '<meta name="viewport" content="width=device-width,initial-scale=1"><title>LogiFlow — setup</title>' +
+    '<meta name="viewport" content="width=device-width,initial-scale=1"><title>StarX — setup</title>' +
     '<style>body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;' +
     'font-family:system-ui,Segoe UI,Roboto,sans-serif;background:#000;color:#ededed}' +
     '.box{max-width:440px;padding:32px;background:#0a0a0a;border:1px solid rgba(255,255,255,.1);border-radius:14px;text-align:center}' +

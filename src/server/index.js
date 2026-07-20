@@ -42,7 +42,11 @@ function createApp(deps = {}) {
   // Rate limiting (trust proxy = 1, so req.ip is the real client).
   const loginLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 20, standardHeaders: true, legacyHeaders: false, message: { error: "Too many login attempts. Try again later." } });
   const apiLimiter   = rateLimit({ windowMs: 5 * 60 * 1000, limit: 300, standardHeaders: true, legacyHeaders: false });
+  // Signup mints a company (trial) — keep it tight so nobody can mass-create tenants.
+  const signupLimiter = rateLimit({ windowMs: 60 * 60 * 1000, limit: 5, standardHeaders: true, legacyHeaders: false, message: { error: "Too many signups from this network. Try again later." } });
   app.use("/auth/login", loginLimiter);
+  app.use("/auth/signup", signupLimiter);
+  app.use("/auth/worker", loginLimiter);
   app.use("/api", apiLimiter);
 
   // Static assets (CSS/JS/icons) — revalidate each load so a deploy never serves stale.
@@ -75,7 +79,7 @@ function startServer(deps = {}) {
   // before serving. No-op without a platform DB (memory/sheets keep the env default).
   require("./tenants").reload().catch(e => console.error("tenants.reload:", e && e.message));
   app.listen(config.PORT, () => {
-    console.log(`🌐 LogiFlow platform on :${config.PORT}`);
+    console.log(`🌐 StarX platform on :${config.PORT}`);
     if (!config.PLATFORM_PASSWORD) console.log("⚠️  PLATFORM_PASSWORD not set — set it in Railway to enable login.");
     if (!process.env.SESSION_SECRET) console.log("⚠️  SESSION_SECRET not set — sessions reset on every restart. Set it in Railway.");
 

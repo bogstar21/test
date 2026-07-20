@@ -3,52 +3,50 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>LogiFlow — Sign in</title>
+  <title>StarX — Sign in</title>
   <link rel="icon" href="/platform/assets/icon.svg">
   <style>
-    /* Matches the platform design system: dark, glass card, light-grey liquid-glass button. */
-    :root { color-scheme: dark; }
+    /* StarX — warm-paper light theme with a coral accent and an ink primary button. */
+    :root { color-scheme: light; --ink:#1b1a16; --dim:#6b665b; --paper:#f3f0e9;
+      --card:#ffffff; --line:#e6e1d5; --line-2:#d5cfbf; --accent:#e04a2d; }
     * { box-sizing: border-box; }
     body { margin:0; min-height:100vh; display:flex; align-items:center; justify-content:center;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-      color:#ededed; padding:20px; letter-spacing:-.01em; -webkit-font-smoothing:antialiased;
-      background: radial-gradient(120% 75% at 82% -8%, rgba(255,255,255,.06), transparent 52%), #000; }
-    .box { width:100%; max-width:390px; padding:32px;
-      background: linear-gradient(180deg, rgba(255,255,255,.055), rgba(255,255,255,.02));
-      border:1px solid rgba(255,255,255,.1); border-radius:22px;
-      backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
-      box-shadow: inset 0 1px 0 rgba(255,255,255,.08), 0 30px 80px -40px #000; }
-    .brand { font-size:28px; font-weight:800; letter-spacing:-.03em; margin:0 0 4px; color:#fff; }
-    .sub { color:#a0a0a0; margin:0 0 24px; font-size:14px; }
-    label { display:block; font-size:12px; color:#a0a0a0; margin:0 0 6px; font-weight:500; }
-    input { width:100%; padding:12px 14px; border-radius:12px; border:1px solid rgba(255,255,255,.12);
-      background:rgba(255,255,255,.06); color:#fff; font-size:15px; transition:border-color .14s, box-shadow .14s, background .14s; }
-    input::placeholder { color:#6b6b6b; }
-    input:focus { outline:0; border-color:rgba(203,208,217,.6); background:rgba(255,255,255,.09);
-      box-shadow:0 0 0 3px rgba(203,208,217,.16); }
-    button { position:relative; overflow:hidden; width:100%; margin-top:16px; padding:13px; cursor:pointer;
-      border:1px solid rgba(255,255,255,.55); border-radius:13px; color:#14171c; font-weight:600; font-size:15px;
-      background: linear-gradient(135deg, rgba(234,236,240,.96), rgba(202,207,215,.9));
-      box-shadow: inset 0 1px 0 rgba(255,255,255,.8), 0 8px 26px -12px rgba(0,0,0,.6); transition:transform .12s, box-shadow .14s, background .14s; }
-    button::before { content:""; position:absolute; inset:0; pointer-events:none; border-radius:inherit;
-      background:linear-gradient(180deg, rgba(255,255,255,.55), rgba(255,255,255,0) 48%); }
-    button:hover { transform:translateY(-1px); background:linear-gradient(135deg, rgba(244,245,248,.98), rgba(214,218,225,.94)); }
+      color:var(--ink); padding:20px; letter-spacing:-.01em; -webkit-font-smoothing:antialiased;
+      background: radial-gradient(120% 75% at 82% -8%, rgba(224,74,45,.06), transparent 52%), var(--paper); }
+    .box { width:100%; max-width:390px; padding:32px; background:var(--card);
+      border:1px solid var(--line); border-radius:22px;
+      box-shadow: 0 30px 80px -50px rgba(0,0,0,.35); }
+    .brand { font-size:28px; font-weight:800; letter-spacing:-.03em; margin:0 0 4px; color:var(--ink); }
+    .sub { color:var(--dim); margin:0 0 24px; font-size:14px; }
+    label { display:block; font-size:12px; color:var(--dim); margin:0 0 6px; font-weight:500; }
+    input { width:100%; padding:12px 14px; border-radius:12px; border:1px solid var(--line-2);
+      background:#fbfaf6; color:var(--ink); font-size:15px; transition:border-color .14s, box-shadow .14s, background .14s; }
+    input::placeholder { color:#a89f90; }
+    input:focus { outline:0; border-color:var(--accent); background:#fff;
+      box-shadow:0 0 0 3px rgba(224,74,45,.14); }
+    button { width:100%; margin-top:16px; padding:13px; cursor:pointer;
+      border:1px solid transparent; border-radius:13px; color:#fff; font-weight:600; font-size:15px;
+      background: linear-gradient(135deg,#211f1a,#14120d);
+      box-shadow: 0 10px 26px -14px rgba(0,0,0,.6); transition:transform .12s, box-shadow .14s, filter .14s; }
+    button:hover { transform:translateY(-1px); filter:brightness(1.08); }
     button:active { transform:scale(.98); }
-    .err { background:rgba(255,94,94,.12); border:1px solid rgba(255,94,94,.4); color:#ff9b9b;
+    .err { background:rgba(214,69,52,.1); border:1px solid rgba(214,69,52,.4); color:#b5382a;
       padding:10px 12px; border-radius:12px; font-size:13px; margin-bottom:16px; }
+    .codebox { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:18px; font-weight:700;
+      padding:12px; border-radius:12px; background:#f2efe7; border:1px solid var(--line-2); text-align:center; letter-spacing:.02em; }
     .tabs { display:flex; gap:6px; margin:0 0 20px; padding:4px; border-radius:13px;
-      border:1px solid rgba(255,255,255,.1); background:rgba(255,255,255,.04); }
-    .tab { flex:1; padding:9px; border-radius:9px; border:0; background:transparent; color:#a0a0a0;
+      border:1px solid var(--line); background:#f2efe7; }
+    .tab { flex:1; padding:9px; border-radius:9px; border:0; background:transparent; color:var(--dim);
       font:inherit; font-size:13.5px; font-weight:600; cursor:pointer; transition:background .14s, color .14s; }
-    .tab.on { background:linear-gradient(135deg,#d7dbe2,#a8aeba); color:#14171c; box-shadow:inset 0 1px 0 rgba(255,255,255,.6); }
+    .tab.on { background:var(--card); color:var(--ink); box-shadow:0 1px 3px rgba(0,0,0,.08); }
     .hide { display:none; }
     .langsw { position:fixed; top:16px; right:16px; display:inline-flex; padding:3px; gap:2px; border-radius:10px;
-      border:1px solid rgba(255,255,255,.12); background:rgba(255,255,255,.05); backdrop-filter:blur(12px); }
-    .langsw button { width:auto; margin:0; padding:4px 8px; border:0; background:transparent; color:#8a8f98;
+      border:1px solid var(--line); background:var(--card); }
+    .langsw button { width:auto; margin:0; padding:4px 8px; border:0; background:transparent; color:var(--dim);
       font:inherit; font-size:11px; font-weight:700; border-radius:7px; box-shadow:none; }
-    .langsw button::before { display:none; }
-    .langsw button:hover { transform:none; background:transparent; color:#fff; }
-    .langsw button.on { background:rgba(255,255,255,.14); color:#fff; }
+    .langsw button:hover { transform:none; filter:none; background:#f2efe7; color:var(--ink); }
+    .langsw button.on { background:var(--accent); color:#fff; }
   </style>
 </head>
 <body>
@@ -58,7 +56,7 @@
     <button data-lang-btn="uk" type="button">UA</button>
   </div>
   <div class="box">
-    <h1 class="brand">LogiFlow</h1>
+    <h1 class="brand">StarX</h1>
     <p class="sub">Plataforma de check-in de campo</p>
 
     <div class="tabs">
@@ -71,9 +69,11 @@
     <div class="err" id="werr" style="display:none"></div>
     <div class="err" id="serr" style="display:none"></div>
 
-    <!-- Manager: password -->
+    <!-- Manager: company code + password -->
     <form method="POST" action="/auth/login" id="form">
-      <label for="password">Contraseña</label>
+      <label for="login-code">Código de empresa <span style="opacity:.6">(vacío si es instalación propia)</span></label>
+      <input type="text" id="login-code" name="code" autocomplete="organization" placeholder="p. ej. mi-empresa-a1b2">
+      <label for="password" style="margin-top:14px">Contraseña</label>
       <input type="password" id="password" name="password" autocomplete="current-password" required>
       <button type="submit">Iniciar sesión</button>
     </form>
@@ -88,6 +88,13 @@
       <p style="color:#9aa0a6;font-size:12px;margin:12px 0 0">14 días de prueba gratis, sin tarjeta.</p>
     </form>
 
+    <!-- Signup success: shows the company code the manager needs to log in later -->
+    <div id="sdone" class="hide">
+      <p style="font-size:14px;margin:0 0 8px">Empresa creada. Guarda tu <b>código de empresa</b> — lo necesitarás para iniciar sesión:</p>
+      <div id="scode" class="codebox"></div>
+      <button type="button" id="sgo">Ir a la plataforma</button>
+    </div>
+
     <!-- Worker: phone (PWA check-in) + optional company code -->
     <form id="wform" class="hide">
       <label for="phone">Tu número de teléfono</label>
@@ -98,7 +105,7 @@
     </form>
   </div>
 
-  <script src="/platform/assets/i18n.js?v=18"></script>
+  <script src="/platform/assets/i18n.js?v=21"></script>
   <script>
     var p = new URLSearchParams(location.search);
     if (p.get("e")) document.getElementById("err").style.display = "block";
@@ -122,6 +129,7 @@
     tabM.onclick = function () { pick("mgr"); document.getElementById("password").focus(); };
     tabW.onclick = function () { pick("wrk"); document.getElementById("phone").focus(); };
     tabN.onclick = function () { pick("new"); document.getElementById("s-company").focus(); };
+    document.getElementById("sgo").onclick = function () { location.href = "/platform"; };
     // Honour ?tab= from the landing page CTAs.
     if (wantTab === "new") pick("new");
     else if (wantTab === "worker") pick("wrk");
@@ -139,7 +147,12 @@
         });
         var data = await res.json().catch(function () { return {}; });
         if (!res.ok) { eS.textContent = data.detail || "No se pudo crear la empresa."; eS.style.display = "block"; return; }
-        location.href = "/platform";
+        // Show the company code so the manager can save it for future logins.
+        if (data.code) {
+          document.getElementById("scode").textContent = data.code;
+          fS.classList.add("hide");
+          document.getElementById("sdone").classList.remove("hide");
+        } else { location.href = "/platform"; }
       } catch (err) { eS.textContent = "Error de red. Inténtalo de nuevo."; eS.style.display = "block"; }
     });
 
