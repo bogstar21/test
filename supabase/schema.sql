@@ -118,13 +118,31 @@ create index if not exists idx_starx_workers_wid       on public.starx_workers (
 create index if not exists idx_starx_points_tenant     on public.starx_points (tenant_id);
 create index if not exists idx_starx_points_worker     on public.starx_points (worker_id);
 
--- ── Storage bucket for PWA check-in photos ────────────────────────────────────────
+-- ── Storage bucket for PWA check-in photos (PRIVATE) ───────────────────────────────
 -- The bot keeps using Telegram file_ids (served via the /api photo proxy); the PWA has
--- no Telegram, so its photos are uploaded here. Public read so the dashboard can show
--- thumbnails directly; writes happen server-side with the service_role key.
+-- no Telegram, so its photos are uploaded here. The bucket is PRIVATE: photos are streamed
+-- through the /api/visits/:id/photo proxy (server-side, service_role key), so a check-in
+-- photo is never reachable via a guessable public bucket URL.
 insert into storage.buckets (id, name, public)
-values ('visit-photos', 'visit-photos', true)
+values ('visit-photos', 'visit-photos', false)
 on conflict (id) do nothing;
+-- Force private even if the bucket was created public by an earlier schema version.
+update storage.buckets set public = false where id = 'visit-photos';
+
+-- ── Audit log (admin actions per tenant) ───────────────────────────────────────────
+-- Every state-changing platform request is recorded here (see src/server/audit.js): who
+-- did what, when, from where. Read-only history for support + security review.
+create table if not exists public.starx_audit (
+  pk         bigint generated always as identity primary key,
+  tenant_id  text default '',
+  actor      text default '',       -- email / role that performed the action
+  role       text default '',
+  action     text default '',       -- e.g. "POST /api/points"
+  ip         text default '',
+  created_at timestamptz default now()
+);
+create index if not exists idx_starx_audit_tenant on public.starx_audit (tenant_id, created_at desc);
+alter table public.starx_audit enable row level security;
 
 -- ── Row Level Security (defense in depth) ──────────────────────────────────────────
 -- The server connects with the service_role key, which BYPASSES RLS — so enabling RLS

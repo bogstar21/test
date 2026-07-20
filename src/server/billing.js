@@ -86,11 +86,27 @@ function verifyWebhook(rawBody, sigHeader) {
   const expected = crypto.createHmac("sha256", secret).update(signed).digest("hex");
   const a = Buffer.from(expected), b = Buffer.from(parts.v1);
   if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) throw new Error("signature_mismatch");
+  // Replay protection: reject signatures older than the tolerance window (default 5 min).
+  const tolerance = parseInt(process.env.STRIPE_WEBHOOK_TOLERANCE || "300", 10);
+  const now = Math.floor(Date.now() / 1000);
+  if (Math.abs(now - Number(parts.t)) > tolerance) throw new Error("timestamp_out_of_tolerance");
   return JSON.parse(Buffer.isBuffer(rawBody) ? rawBody.toString("utf8") : rawBody);
+}
+
+// Idempotency: Stripe can deliver the same event more than once. Remember the ids we've
+// already applied (bounded, in-memory) so a duplicate/replayed delivery is a no-op.
+const _seenEvents = new Set();
+function alreadyHandled(id) {
+  if (!id) return false;
+  if (_seenEvents.has(id)) return true;
+  _seenEvents.add(id);
+  if (_seenEvents.size > 5000) _seenEvents.delete(_seenEvents.values().next().value);
+  return false;
 }
 
 // Map the subset of Stripe events we care about onto tenant plan/subscription state.
 async function handleEvent(event) {
+  if (alreadyHandled(event && event.id)) return; // duplicate/replayed delivery → no-op
   const obj = (event.data && event.data.object) || {};
   const tenantId = (obj.metadata && obj.metadata.tenant_id) || obj.client_reference_id || "";
   switch (event.type) {

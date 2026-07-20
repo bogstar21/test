@@ -39,6 +39,37 @@ function createApp(deps = {}) {
   app.use(cookieParser());
   app.use(attachUser);
 
+  // CSRF defense + audit for the session-authenticated API. Skips the connector (/api/v1,
+  // its own X-API-Key credential, no cookies) and the Stripe webhook (signed separately).
+  app.use("/api", (req, res, next) => {
+    if (req.path.startsWith("/v1") || req.path === "/billing/webhook") return next();
+    const method = req.method.toUpperCase();
+    if (method === "GET" || method === "HEAD" || method === "OPTIONS") return next();
+
+    // Cross-site POST/PUT/DELETE: browsers always send Origin on these. If present it must
+    // match our host; a mismatch is a forged cross-site request → reject.
+    const origin = req.get("origin") || req.get("referer") || "";
+    if (origin) {
+      let host = "";
+      try { host = new URL(origin).host; } catch (e) { host = "x"; }
+      if (host !== req.get("host")) return res.status(403).json({ error: "bad_origin" });
+    }
+
+    // Record the action once the response is known to have succeeded.
+    res.on("finish", () => {
+      if (res.statusCode >= 200 && res.statusCode < 400 && req.user) {
+        require("./audit").log({
+          tenantId: req.user.tenantId,
+          actor: req.user.email || req.user.role,
+          role: req.user.role,
+          action: method + " " + String(req.originalUrl || req.url).split("?")[0],
+          ip: req.ip,
+        });
+      }
+    });
+    next();
+  });
+
   // Rate limiting (trust proxy = 1, so req.ip is the real client).
   const loginLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 20, standardHeaders: true, legacyHeaders: false, message: { error: "Too many login attempts. Try again later." } });
   const apiLimiter   = rateLimit({ windowMs: 5 * 60 * 1000, limit: 300, standardHeaders: true, legacyHeaders: false });
