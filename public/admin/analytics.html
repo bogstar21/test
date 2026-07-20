@@ -43,6 +43,21 @@
     .pill.past_due { background:rgba(217,144,43,.14); color:#a86a1c; }
     .pill.canceled, .pill.unknown { background:rgba(107,102,91,.12); color:var(--dim); }
     .empty { color:var(--dim); font-size:13px; padding:20px 0; text-align:center; }
+
+    .card .head { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:14px; flex-wrap:wrap; }
+    .card .head h2 { margin:0; }
+    .log-toggle { display:flex; align-items:center; gap:8px; }
+    .log { background:#14120d; border-radius:12px; padding:12px 14px; height:340px; overflow-y:auto; font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size:12.5px; line-height:1.6; }
+    .log .row { white-space:pre-wrap; word-break:break-word; color:#cfc9bd; }
+    .log .t { color:#7d7768; }
+    .log .lv { font-weight:700; margin:0 6px; }
+    .log .lv.info { color:#6db5ff; }
+    .log .lv.warn { color:#f6b545; }
+    .log .lv.error { color:#ff6b5c; }
+    .log .meta { color:#9a9484; }
+    .log .empty { color:#7d7768; }
+    .dot-live { width:8px; height:8px; border-radius:50%; background:#46c088; display:inline-block; box-shadow:0 0 0 3px rgba(70,192,136,.18); }
+    .dot-live.paused { background:#a86a1c; box-shadow:0 0 0 3px rgba(217,144,43,.18); }
   </style>
 </head>
 <body>
@@ -70,6 +85,17 @@
     <div class="card">
       <h2>Empresas</h2>
       <div id="table-wrap"><div class="empty">Cargando…</div></div>
+    </div>
+
+    <div class="card">
+      <div class="head">
+        <h2><span class="dot-live" id="log-dot"></span> Logs en vivo</h2>
+        <div class="log-toggle">
+          <button class="btn-ghost" id="log-pause">Pausar</button>
+          <button class="btn-ghost" id="log-clear">Limpiar</button>
+        </div>
+      </div>
+      <div class="log" id="log"><div class="empty">Esperando eventos…</div></div>
     </div>
   </div>
 
@@ -115,13 +141,62 @@
 
     async function loadData() {
       var res = await fetch("/admin/analytics/data");
-      if (res.status === 401) { gate.classList.remove("hide"); dash.classList.add("hide"); return; }
+      if (res.status === 401) { gate.classList.remove("hide"); dash.classList.add("hide"); stopLogs(); return; }
       var data = await res.json();
       gate.classList.add("hide"); dash.classList.remove("hide");
       document.getElementById("ts").textContent = "Actualizado: " + fmtDate(data.generatedAt);
       renderKpis(data.totals);
       renderTable(data.companies || []);
+      startLogs();
     }
+
+    // ── Live log tail (incremental polling) ──────────────────────────────────
+    var logEl = document.getElementById("log"), logDot = document.getElementById("log-dot");
+    var lastId = 0, logTimer = null, paused = false, logStarted = false;
+    function fmtLogTime(ts) { return String(ts || "").slice(11, 19); }
+    function appendLogs(logs) {
+      if (!logs.length) return;
+      var atBottom = (logEl.scrollHeight - logEl.scrollTop - logEl.clientHeight) < 40;
+      var firstReal = logEl.querySelector(".empty"); if (firstReal) logEl.innerHTML = "";
+      logs.forEach(function (e) {
+        lastId = Math.max(lastId, e.id || 0);
+        var meta = e.meta ? ' <span class="meta">' + esc(JSON.stringify(e.meta)) + '</span>' : "";
+        var div = document.createElement("div");
+        div.className = "row";
+        div.innerHTML = '<span class="t">' + esc(fmtLogTime(e.ts)) + '</span>' +
+          '<span class="lv ' + esc(e.level) + '">' + esc((e.level || "").toUpperCase()) + '</span>' +
+          esc(e.message) + meta;
+        logEl.appendChild(div);
+      });
+      // Cap the DOM so a long session doesn't grow unbounded.
+      while (logEl.childElementCount > 600) logEl.removeChild(logEl.firstChild);
+      if (atBottom) logEl.scrollTop = logEl.scrollHeight;
+    }
+    async function pollLogs() {
+      if (paused) return;
+      try {
+        var res = await fetch("/admin/analytics/logs?after=" + lastId);
+        if (res.status === 401) { stopLogs(); gate.classList.remove("hide"); dash.classList.add("hide"); return; }
+        var data = await res.json();
+        appendLogs(data.logs || []);
+      } catch (e) { /* transient — next tick retries */ }
+    }
+    function startLogs() {
+      if (logStarted) return;
+      logStarted = true;
+      pollLogs();
+      logTimer = setInterval(pollLogs, 3000);
+    }
+    function stopLogs() { if (logTimer) clearInterval(logTimer); logTimer = null; logStarted = false; }
+    document.getElementById("log-pause").addEventListener("click", function () {
+      paused = !paused;
+      this.textContent = paused ? "Reanudar" : "Pausar";
+      logDot.classList.toggle("paused", paused);
+      if (!paused) pollLogs();
+    });
+    document.getElementById("log-clear").addEventListener("click", function () {
+      logEl.innerHTML = '<div class="empty">Limpiado. Esperando nuevos eventos…</div>';
+    });
 
     document.getElementById("form").addEventListener("submit", async function (e) {
       e.preventDefault();
@@ -139,6 +214,7 @@
 
     document.getElementById("logout").addEventListener("click", async function () {
       await fetch("/admin/analytics/logout", { method: "POST" });
+      stopLogs();
       dash.classList.add("hide"); gate.classList.remove("hide");
     });
 

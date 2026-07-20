@@ -6,6 +6,7 @@
 const path    = require("path");
 const crypto  = require("crypto");
 const config  = require("../config");
+const logger  = require("../logger");
 const { forTenant } = require("../datasource");
 
 const COOKIE = "starx_superadmin";
@@ -104,6 +105,13 @@ function mountAdminRoutes(app) {
       console.error("/admin/analytics/data error:", e && e.message);
       res.status(500).json({ error: "server_error" });
     }
+  });
+
+  // Live log tail: incremental — client passes ?after=<last id> and gets only newer
+  // entries, so the page can poll cheaply. In-memory / per-process (see logger.js).
+  app.get("/admin/analytics/logs", requireSuperAdmin, (req, res) => {
+    const after = parseInt(req.query.after, 10) || 0;
+    res.json({ logs: logger.recent(after) });
   });
 }
 
