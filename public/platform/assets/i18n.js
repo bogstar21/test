@@ -458,6 +458,32 @@
     // ── Visits table ──────────────────────────────────────────────────────────────
     "Ver": ["View", "Переглянути"],
     "mapa ↗": ["map ↗", "карта ↗"],
+    "Albarán": ["Delivery note", "Накладна"],
+    "Descargar Albarán (PDF)": ["Download delivery note (PDF)", "Завантажити накладну (PDF)"],
+
+    // ── PDF / Albarán settings tab ───────────────────────────────────────────────
+    "PDF / Albarán": ["PDF / Delivery note", "PDF / Накладна"],
+    "Datos de tu empresa para el justificante de visita (Albarán) que se genera por cada check-in.": [
+      "Your company's details for the proof-of-visit document (delivery note) generated for every check-in.",
+      "Дані вашої компанії для документа підтвердження візиту (накладної), що формується для кожного чек-іну."],
+    "Datos del documento": ["Document details", "Дані документа"],
+    "Estos datos aparecen en la cabecera de cada Albarán descargable desde Visitas.": [
+      "This information appears in the header of every delivery note downloadable from Visits.",
+      "Ця інформація з'являється в шапці кожної накладної, доступної для завантаження з розділу Візити."],
+    "Razón social": ["Legal company name", "Юридична назва компанії"],
+    "CIF / NIF / VAT": ["Tax ID / VAT", "ІПН / VAT"],
+    "Dirección y contacto": ["Address & contact", "Адреса та контакти"],
+    "URL del logo": ["Logo URL", "URL логотипу"],
+    "Título del documento": ["Document title", "Назва документа"],
+    "Nota / aviso legal al pie": ["Footer note / legal disclaimer", "Примітка/застереження внизу"],
+    "Guardar datos": ["Save details", "Зберегти дані"],
+
+    // ── Check-in note: quick-pick chips (worker PWA) ─────────────────────────────
+    "+ Dejado en la puerta": ["+ Left at the door", "+ Залишено біля дверей"],
+    "+ Verja cerrada": ["+ Gate locked", "+ Ворота зачинені"],
+    "+ Entregado en recepción": ["+ Delivered to front desk", "+ Передано на ресепшн"],
+    "+ Cliente ausente": ["+ Client not present", "+ Клієнта немає на місці"],
+    "+ Daños observados": ["+ Damage observed", "+ Виявлено пошкодження"],
 
     // ── Stats: attention cards ────────────────────────────────────────────────────
     "Todo en orden": ["All good", "Усе гаразд"],

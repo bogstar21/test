@@ -61,6 +61,21 @@ function attachHandlers(bot) {
   // Button labels reused in message handlers (keep in one place so they can't drift).
   const BTN_DONE = "✅ Terminar", BTN_CANCEL = "❌ Cancelar";
 
+  // Optional post-photo commentary step: quick-pick presets (inline buttons) or the
+  // worker just types (or sends a voice note for) their own comment. `skip` writes no note.
+  const NOTE_PRESETS = {
+    delivered: "📦 Entregado en recepción", absent: "🚪 Cliente no presente",
+    damage: "⚠️ Daños observados", skip: "",
+  };
+  const noteKb = {
+    inline_keyboard: [
+      [{ text: "📦 Entregado en recepción", callback_data: "note:delivered" }],
+      [{ text: "🚪 Cliente no presente", callback_data: "note:absent" }],
+      [{ text: "⚠️ Daños observados", callback_data: "note:damage" }],
+      [{ text: "⏭️ Omitir", callback_data: "note:skip" }],
+    ],
+  };
+
   // Resolve the worker behind a Telegram id (across all companies) and remember the tenant.
   async function findWorker(telegramId) {
     const res = await resolveByTelegram(telegramId);
@@ -188,7 +203,41 @@ function attachHandlers(bot) {
     catch (e) { bot.sendMessage(msg.chat.id, "⚠️ No pude cargar tu ruta. Inténtalo de nuevo en un momento."); console.error("/route error:", e.message); }
   });
 
-  // ── Inline buttons: tap a stop (ci:i) or refresh the route (route:refresh) ────
+  // Writes the Visit (whatever comment text, or "" to skip) and resets the worker's state.
+  // Shared by the quick-pick inline buttons, a typed comment, and a voice-note comment.
+  async function finalizeVisit(chatId, userId, note) {
+    const st = getState(userId);
+    try {
+      const worker = st.worker || await findWorker(userId);
+      const src = srcOf(userId);
+      if (!src) { clearState(userId); return bot.sendMessage(chatId, "⚠️ Sesión caducada. Pulsa /route otra vez.", { reply_markup: removeKb }); }
+      const visitId = await src.addVisit({
+        timestamp: new Date().toISOString(),
+        workerId: worker ? worker.workerId : "",
+        workerTelegramId: String(userId),
+        workerName: worker ? worker.name : "",
+        pointId: st.pointId, pointName: st.pointName,
+        lat: st.lat, lng: st.lng, mapsLink: st.mapsLink,
+        photoCount: (st.photos || []).length,
+        photoFileIds: st.photos || [],
+        source: "bot",
+        note: String(note || "").slice(0, 500),
+      });
+      // First check-in fixes the point's coordinates (only if still empty).
+      try { await src.ensurePointLocation(st.pointId, st.lat, st.lng); }
+      catch (e) { console.error("ensurePointLocation error:", e.message); }
+      clearState(userId);
+      bot.sendMessage(chatId,
+        `✅ *Check-in guardado* en *${esc(st.pointName)}*.\n📸 Fotos: ${(st.photos || []).length}\n🆔 ${esc(visitId)}\n\nPulsa /route para la siguiente parada.`,
+        { parse_mode: "Markdown", reply_markup: removeKb });
+    } catch (e) {
+      console.error("finalize error:", e.message);
+      bot.sendMessage(chatId, "⚠️ No pude guardar el check-in. Pulsa /route otra vez.", { reply_markup: removeKb });
+    }
+  }
+
+  // ── Inline buttons: tap a stop (ci:i), refresh the route (route:refresh), or pick a
+  // quick-comment preset after photos (note:*) ─────────────────────────────────
   bot.on("callback_query", async (q) => {
     const [action, idx] = (q.data || "").split(":");
     const userId = q.from.id;
@@ -202,6 +251,11 @@ function attachHandlers(bot) {
       setState(userId, { step: "searching" });
       await bot.answerCallbackQuery(q.id).catch(() => {});
       return bot.sendMessage(q.message.chat.id, "🔍 Escribe parte del *nombre o dirección* de la parada:", { parse_mode: "Markdown" });
+    }
+    if (action === "note") {
+      await bot.answerCallbackQuery(q.id).catch(() => {});
+      if (getState(userId).step !== "waiting_comment") return;
+      return finalizeVisit(q.message.chat.id, userId, NOTE_PRESETS[idx] || "");
     }
     if (action !== "ci") return bot.answerCallbackQuery(q.id).catch(() => {});
 
@@ -312,10 +366,21 @@ function attachHandlers(bot) {
     bot.sendMessage(msg.chat.id, `📸 Foto ${photos.length} recibida. Envía más o pulsa *✅ Terminar*.`, { parse_mode: "Markdown", reply_markup: doneKb });
   });
 
-  // ── Done / Cancel (plain text from the reply keyboard) ───────────────────────
+  // ── Voice-note comment (only meaningful during the optional comment step) ────
+  // We don't transcribe (no speech-to-text service wired in) — the note stores a
+  // reference to the Telegram voice file so it can be played back from the platform
+  // (see GET /api/visits/:id/voice in routes/visits.js), same proxy pattern as photos.
+  bot.on("voice", (msg) => {
+    if (msg.chat.type !== "private") return;
+    const userId = msg.from.id;
+    if (getState(userId).step !== "waiting_comment") return;
+    finalizeVisit(msg.chat.id, userId, "🎙️voice:" + msg.voice.file_id);
+  });
+
+  // ── Done / Cancel (plain text from the reply keyboard) + typed comment ───────
   bot.on("message", async (msg) => {
     if (msg.chat.type !== "private") return;
-    if (msg.location || msg.photo || msg.contact) return;
+    if (msg.location || msg.photo || msg.contact || msg.voice) return;
     const text = (msg.text || "").trim();
     if (text.startsWith("/")) return; // commands handled by onText
     const userId = msg.from.id;
@@ -333,38 +398,30 @@ function attachHandlers(bot) {
       return;
     }
 
+    // Optional commentary step: pressing "Terminar" here (or anything typed) either skips
+    // or IS the comment — the quick-pick presets arrive as callback_query, handled above.
+    if (st.step === "waiting_comment") {
+      if (text === BTN_DONE || !text) return finalizeVisit(msg.chat.id, userId, "");
+      return finalizeVisit(msg.chat.id, userId, text);
+    }
+
     if (text === BTN_DONE) {
       if (st.step !== "waiting_photos") return bot.sendMessage(msg.chat.id, "No hay nada que terminar. Pulsa /route para empezar.", { reply_markup: removeKb });
       try {
-        const worker = st.worker || await findWorker(userId);
         const src = srcOf(userId);
         if (!src) return bot.sendMessage(msg.chat.id, "⚠️ Sesión caducada. Pulsa /route otra vez.", { reply_markup: removeKb });
         // A.2 — Photo may be required per company.
         if (!(st.photos || []).length && String(await src.getSetting("photo_required", "0")) === "1") {
           return bot.sendMessage(msg.chat.id, "📸 Esta empresa exige al menos una foto. Envía una foto y luego pulsa *✅ Terminar*.", { parse_mode: "Markdown", reply_markup: doneKb });
         }
-        const visitId = await src.addVisit({
-          timestamp: new Date().toISOString(),
-          workerId: worker ? worker.workerId : "",
-          workerTelegramId: String(userId),
-          workerName: worker ? worker.name : "",
-          pointId: st.pointId, pointName: st.pointName,
-          lat: st.lat, lng: st.lng, mapsLink: st.mapsLink,
-          photoCount: (st.photos || []).length,
-          photoFileIds: st.photos || [],
-          source: "bot",
-          note: "",
-        });
-        // First check-in fixes the point's coordinates (only if still empty).
-        try { await src.ensurePointLocation(st.pointId, st.lat, st.lng); }
-        catch (e) { console.error("ensurePointLocation error:", e.message); }
-        clearState(userId);
+        const worker = st.worker || await findWorker(userId);
+        setState(userId, { step: "waiting_comment", worker });
         bot.sendMessage(msg.chat.id,
-          `✅ *Check-in guardado* en *${esc(st.pointName)}*.\n📸 Fotos: ${(st.photos || []).length}\n🆔 ${esc(visitId)}\n\nPulsa /route para la siguiente parada.`,
-          { parse_mode: "Markdown", reply_markup: removeKb });
+          "📝 ¿Quieres añadir un comentario? Envía un texto o una nota de voz, o elige una opción rápida (o pulsa *✅ Terminar* para omitir):",
+          { parse_mode: "Markdown", reply_markup: noteKb });
       } catch (e) {
-        console.error("finalize error:", e.message);
-        bot.sendMessage(msg.chat.id, "⚠️ No pude guardar el check-in. Pulsa *✅ Terminar* de nuevo.", { parse_mode: "Markdown", reply_markup: doneKb });
+        console.error("comment-step error:", e.message);
+        bot.sendMessage(msg.chat.id, "⚠️ Algo falló. Pulsa *✅ Terminar* de nuevo.", { parse_mode: "Markdown", reply_markup: doneKb });
       }
     }
   });

@@ -153,6 +153,7 @@
     else if (v === "stats") loadStats();
     else if (v === "import") renderMapping();
     else if (v === "settings") { loadSettings(); loadBot(); }
+    else if (v === "pdf") loadPdfSettings();
     else if (v === "checkin") loadCheckin();
   }
 
@@ -695,6 +696,16 @@
   }
 
   // ── Visits ───────────────────────────────────────────────────────────────────
+  // A bot voice-note comment is stored as "🎙️voice:<file_id>" instead of text (see
+  // bot/handlers.js) — render it as a playable link instead of the raw marker.
+  var VOICE_PREFIX = "🎙️voice:";
+  function noteCell(v) {
+    var note = String(v.note || "");
+    if (note.indexOf(VOICE_PREFIX) === 0) {
+      return '<audio controls preload="none" style="height:28px;max-width:180px" src="/api/visits/' + encodeURIComponent(v.visitId) + '/voice"></audio>';
+    }
+    return note ? esc(note) : '<span class="muted">—</span>';
+  }
   function photoCell(v) {
     var n = v.photoCount || 0;
     if (!n) return '<span class="muted">—</span>';
@@ -736,8 +747,9 @@
     wrap.innerHTML = tableWrap(["Hora", "Trabajador", "Punto", "Ubicación", "Fotos", "Nota", ""], rows.map(function (v) {
       return '<tr><td data-label="Hora">' + fmtTime(v.timestamp) + '</td><td data-label="Trabajador">' + esc(v.workerName || v.workerTelegramId) + '</td><td data-label="Punto">' + esc(v.pointName || v.pointId) + '</td><td data-label="Ubicación">' +
         (v.mapsLink ? '<a href="' + esc(v.mapsLink) + '" target="_blank" rel="noopener">mapa</a>' : '<span class="muted">—</span>') +
-        '</td><td data-label="Fotos">' + photoCell(v) + '</td><td data-label="Nota" class="muted">' + esc(v.note || "") +
-        '</td><td data-label=""><button class="btn ghost sm" data-visit-detail="' + esc(v.visitId) + '">Ver</button></td></tr>';
+        '</td><td data-label="Fotos">' + photoCell(v) + '</td><td data-label="Nota" class="muted">' + noteCell(v) +
+        '</td><td data-label=""><div class="tbl-actions"><button class="btn ghost sm" data-visit-detail="' + esc(v.visitId) + '">Ver</button>' +
+        '<a class="btn ghost sm" href="/api/visits/' + encodeURIComponent(v.visitId) + '/pdf" target="_blank" rel="noopener">' + window.LF.t("Albarán") + '</a></div></td></tr>';
     }).join(""), true);
   }
 
@@ -759,8 +771,10 @@
       row("Punto", esc(v.pointName || v.pointId || "—")) +
       row("Fuente", v.source === "pwa" ? "App (PWA)" : "Bot de Telegram") +
       row("Ubicación", v.mapsLink ? '<a href="' + esc(v.mapsLink) + '" target="_blank" rel="noopener">' + esc(v.lat) + ", " + esc(v.lng) + ' — mapa</a>' : '<span class="muted">—</span>') +
-      row("Nota", v.note ? esc(v.note) : '<span class="muted">—</span>') +
-      '<div class="vd-photos">' + (photos || '<span class="muted">Sin fotos</span>') + '</div>';
+      row("Nota", noteCell(v)) +
+      '<div class="vd-photos">' + (photos || '<span class="muted">Sin fotos</span>') + '</div>' +
+      '<div class="toolbar" style="margin-top:14px"><a class="btn ghost sm" href="/api/visits/' + encodeURIComponent(v.visitId) +
+      '/pdf" target="_blank" rel="noopener"><svg class="ic"><use href="#i-sheet"/></svg> ' + window.LF.t("Descargar Albarán (PDF)") + '</a></div>';
     openModal("Detalle del check-in", html, null);
   }
 
@@ -1236,6 +1250,30 @@
     } catch (e) { sel.innerHTML = '<option value="">' + esc(e.message) + "</option>"; }
     loadCheckinStats();
   }
+  // Note field: quick-pick chips + character counter + a localStorage draft so a dropped
+  // connection in the field never loses what the worker already typed.
+  var NOTE_DRAFT_KEY = "starx-checkin-note-draft";
+  function initCheckinNote() {
+    var note = $("#ci-note"), counter = $("#ci-note-count"), chips = $("#ci-note-chips");
+    if (!note) return;
+    var draft = "";
+    try { draft = localStorage.getItem(NOTE_DRAFT_KEY) || ""; } catch (e) {}
+    if (draft) note.value = draft;
+    if (counter) counter.textContent = String(note.value.length);
+    note.addEventListener("input", function () {
+      if (counter) counter.textContent = String(note.value.length);
+      try { localStorage.setItem(NOTE_DRAFT_KEY, note.value); } catch (e) {}
+    });
+    if (chips) chips.addEventListener("click", function (e) {
+      var btn = e.target.closest("[data-note-chip]");
+      if (!btn) return;
+      var phrase = btn.getAttribute("data-note-chip");
+      note.value = (note.value ? note.value.replace(/\s+$/, "") + " " : "") + phrase;
+      note.value = note.value.slice(0, 250);
+      note.dispatchEvent(new Event("input"));
+      note.focus();
+    });
+  }
   function captureLocation() {
     var st = $("#ci-geo-status");
     if (!navigator.geolocation) { st.textContent = "Este dispositivo no permite geolocalización."; return; }
@@ -1293,6 +1331,8 @@
       }
       checkin = { lat: "", lng: "" };
       $("#ci-photo").value = ""; $("#ci-note").value = "";
+      $("#ci-note-count").textContent = "0";
+      try { localStorage.removeItem(NOTE_DRAFT_KEY); } catch (e) {}
       $("#ci-geo-status").textContent = "Aún no capturada.";
       loadCheckin();
     } catch (e) { toast(e.message, true); }
@@ -1354,6 +1394,32 @@
     try { renderSettings(await api("/api/settings")); }
     catch (e) { /* ignore for non-critical panel */ }
     loadBilling();
+  }
+
+  // ── PDF / Albarán branding settings ──────────────────────────────────────────
+  var PDF_FIELD_IDS = {
+    pdfCompanyName: "pdf-company-name", pdfTaxId: "pdf-tax-id", pdfAddress: "pdf-address",
+    pdfLogoUrl: "pdf-logo-url", pdfDocTitle: "pdf-doc-title", pdfFootnote: "pdf-footnote",
+  };
+  async function loadPdfSettings() {
+    try {
+      var s = await api("/api/pdf-settings");
+      Object.keys(PDF_FIELD_IDS).forEach(function (field) {
+        var el = $("#" + PDF_FIELD_IDS[field]);
+        if (el) el.value = s[field] || "";
+      });
+    } catch (e) { /* non-critical panel */ }
+  }
+  async function savePdfSettings() {
+    var btn = $("#pdf-settings-save"); btn.disabled = true;
+    var body = {};
+    Object.keys(PDF_FIELD_IDS).forEach(function (field) {
+      var el = $("#" + PDF_FIELD_IDS[field]);
+      if (el) body[field] = el.value;
+    });
+    try { await api("/api/pdf-settings", { method: "POST", body: JSON.stringify(body) }); toast("Guardado"); }
+    catch (e) { toast(e.message, true); }
+    finally { btn.disabled = false; }
   }
 
   // ── Billing / subscription panel ─────────────────────────────────────────────
@@ -1646,6 +1712,7 @@
     // Check-in (worker PWA)
     $("#ci-geo").onclick = captureLocation;
     $("#ci-submit").onclick = submitCheckin;
+    initCheckinNote();
 
     // Settings (PWA toggle + connector key)
     var pwaBtn = $("#pwa-toggle"); if (pwaBtn) pwaBtn.onclick = togglePwa;
@@ -1655,6 +1722,7 @@
     var pwSaveBtn = $("#acct-pw-save"); if (pwSaveBtn) pwSaveBtn.onclick = changePassword;
     var exportBtn = $("#acct-export"); if (exportBtn) exportBtn.onclick = exportAllData;
     var obBtn = $("#settings-onboard-btn"); if (obBtn) obBtn.onclick = function () { openOnboarding(); };
+    var pdfSaveBtn = $("#pdf-settings-save"); if (pdfSaveBtn) pdfSaveBtn.onclick = savePdfSettings;
 
     // Onboarding wizard controls
     $("#ob-skip").onclick = function () { closeOnboarding(true); };

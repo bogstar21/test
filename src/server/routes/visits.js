@@ -6,6 +6,7 @@ const config  = require("../config");
 const { requireAuth } = require("../auth");
 const { forTenant } = require("../datasource");
 const { localDateStr } = require("../util");
+const { renderVisitPdf } = require("../pdf");
 
 function ds(req) { return forTenant(config.getTenant(req)); }
 function fail(res, e) { console.error("/api/visits error:", e && e.message); res.status(500).json({ error: (e && e.message) || "server_error" }); }
@@ -60,6 +61,53 @@ function mountVisitRoutes(app) {
       res.set("Content-Type", tg.headers.get("content-type") || "image/jpeg");
       res.set("Cache-Control", "private, max-age=3600");
       res.send(Buffer.from(await tg.arrayBuffer()));
+    } catch (e) { fail(res, e); }
+  });
+
+  // Play back a voice-note comment left via the bot's optional commentary step (see
+  // bot/handlers.js): the note stores "🎙️voice:<telegram file_id>" instead of text, and
+  // this proxies the audio bytes the same way the photo endpoint proxies Telegram photos.
+  const VOICE_PREFIX = "🎙️voice:";
+  r.get("/visits/:visitId/voice", async (req, res) => {
+    try {
+      const visits = await ds(req).listVisits({ limit: 5000 });
+      const visit = visits.find(v => String(v.visitId) === String(req.params.visitId));
+      if (!visit) return res.status(404).json({ error: "visit_not_found" });
+      const note = String(visit.note || "");
+      if (!note.startsWith(VOICE_PREFIX)) return res.status(404).json({ error: "no_voice_note" });
+      const fileId = note.slice(VOICE_PREFIX.length);
+      let link;
+      try { link = await require("../bot/manager").fileLink(fileId); }
+      catch (e) {
+        if (e && e.code === "bot_off") return res.status(409).json({ error: "Bot is off — turn it on to load voice notes." });
+        throw e;
+      }
+      const tg = await fetch(link);
+      if (!tg.ok) return res.status(502).json({ error: "telegram_fetch_failed" });
+      res.set("Content-Type", tg.headers.get("content-type") || "audio/ogg");
+      res.set("Cache-Control", "private, max-age=3600");
+      res.send(Buffer.from(await tg.arrayBuffer()));
+    } catch (e) { fail(res, e); }
+  });
+
+  // Albarán / proof-of-visit PDF for one check-in — tenant-branded via the pdf-settings
+  // saved from the PDF Settings tab (see routes/platform.js).
+  r.get("/visits/:visitId/pdf", async (req, res) => {
+    try {
+      const tenant = config.getTenant(req);
+      const source = ds(req);
+      const [visits, points] = await Promise.all([
+        source.listVisits({ limit: 5000 }), source.listPoints(),
+      ]);
+      const visit = visits.find(v => String(v.visitId) === String(req.params.visitId));
+      if (!visit) return res.status(404).json({ error: "visit_not_found" });
+      const point = points.find(p => String(p.id) === String(visit.pointId)) || null;
+      const pdfSettings = {};
+      const fields = ["pdfCompanyName", "pdfTaxId", "pdfAddress", "pdfLogoUrl", "pdfDocTitle", "pdfFootnote"];
+      const keys = { pdfCompanyName: "pdf_company_name", pdfTaxId: "pdf_tax_id", pdfAddress: "pdf_address", pdfLogoUrl: "pdf_logo_url", pdfDocTitle: "pdf_doc_title", pdfFootnote: "pdf_footnote" };
+      for (const f of fields) pdfSettings[f] = String(await source.getSetting(keys[f], "") || "");
+      const baseUrl = (config.PLATFORM_URL || `${req.protocol}://${req.get("host")}`).replace(/\/+$/, "");
+      await renderVisitPdf(res, { visit, point, tenant, pdfSettings, source, baseUrl });
     } catch (e) { fail(res, e); }
   });
 

@@ -16,6 +16,7 @@ const rateLimit = require("express-rate-limit");
 const config  = require("../config");
 const { requireApiKey } = require("../auth");
 const { forTenant } = require("../datasource");
+const { renderVisitPdf } = require("../pdf");
 
 const MAX_ROWS = 5000;
 
@@ -142,6 +143,26 @@ function mountConnectRoutes(app) {
       res.set("Content-Type", tg.headers.get("content-type") || "image/jpeg");
       res.set("Cache-Control", "private, max-age=3600");
       res.send(Buffer.from(await tg.arrayBuffer()));
+    } catch (e) { fail(res, e); }
+  });
+
+  // Albarán / proof-of-visit PDF for connector consumers (X-API-Key) — same document as
+  // the platform's session-authenticated route, see routes/visits.js.
+  r.get("/visits/:visitId/pdf", async (req, res) => {
+    try {
+      const tenant = config.getTenant(req);
+      const source = ds(req);
+      const [visits, points] = await Promise.all([
+        source.listVisits({ limit: MAX_ROWS }), source.listPoints(),
+      ]);
+      const visit = visits.find(v => String(v.visitId) === String(req.params.visitId));
+      if (!visit) return res.status(404).json({ error: "visit_not_found" });
+      const point = points.find(p => String(p.id) === String(visit.pointId)) || null;
+      const keys = { pdfCompanyName: "pdf_company_name", pdfTaxId: "pdf_tax_id", pdfAddress: "pdf_address", pdfLogoUrl: "pdf_logo_url", pdfDocTitle: "pdf_doc_title", pdfFootnote: "pdf_footnote" };
+      const pdfSettings = {};
+      for (const f of Object.keys(keys)) pdfSettings[f] = String(await source.getSetting(keys[f], "") || "");
+      const base = (config.PLATFORM_URL || `${req.protocol}://${req.get("host")}`).replace(/\/+$/, "");
+      await renderVisitPdf(res, { visit, point, tenant, pdfSettings, source, baseUrl: base });
     } catch (e) { fail(res, e); }
   });
 

@@ -106,6 +106,43 @@ function mountPlatformRoutes(app) {
     }
   });
 
+  // Albarán/PDF branding — tenant-level template data used by GET /api/visits/:id/pdf
+  // (see routes/visits.js). Stored as plain settings, same seam as everything else.
+  const PDF_FIELDS = {
+    pdfCompanyName: "pdf_company_name",
+    pdfTaxId:       "pdf_tax_id",
+    pdfAddress:     "pdf_address",
+    pdfLogoUrl:     "pdf_logo_url",
+    pdfDocTitle:    "pdf_doc_title",
+    pdfFootnote:    "pdf_footnote",
+  };
+  r.get("/pdf-settings", async (req, res) => {
+    try {
+      const source = forTenant(config.getTenant(req));
+      const out = {};
+      for (const [field, key] of Object.entries(PDF_FIELDS)) out[field] = String(await source.getSetting(key, "") || "");
+      res.json(out);
+    } catch (e) {
+      console.error("/api/pdf-settings error:", e && e.message);
+      res.status(500).json({ error: (e && e.message) || "server_error" });
+    }
+  });
+  r.post("/pdf-settings", requireRole("admin"), async (req, res) => {
+    try {
+      const source = forTenant(config.getTenant(req));
+      const body = req.body || {};
+      for (const [field, key] of Object.entries(PDF_FIELDS)) {
+        if (typeof body[field] !== "undefined") await source.setSetting(key, String(body[field] || "").slice(0, 2000));
+      }
+      const out = {};
+      for (const [field, key] of Object.entries(PDF_FIELDS)) out[field] = String(await source.getSetting(key, "") || "");
+      res.json({ ok: true, ...out });
+    } catch (e) {
+      console.error("/api/pdf-settings error:", e && e.message);
+      res.status(500).json({ error: (e && e.message) || "server_error" });
+    }
+  });
+
   // Admin changes their own company's login password. The env-configured "default" tenant
   // has no DB row of its own — its password is PLATFORM_PASSWORD — so it's rejected here
   // with a clear explanation instead of silently doing nothing (reload() would re-derive
