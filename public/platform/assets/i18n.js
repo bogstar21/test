@@ -305,7 +305,158 @@
     "sin Telegram": ["no Telegram", "без Telegram"],
     "nunca": ["never", "ніколи"],
     "— hecho hoy": [" — done today", " — зроблено сьогодні"],
-    "No hay paradas asignadas": ["No assigned stops", "Немає призначених точок"]
+    "No hay paradas asignadas": ["No assigned stops", "Немає призначених точок"],
+
+    // ── Login / signup: forgot-password, back-link, email, terms checkbox ──────────
+    "¿Olvidaste tu contraseña?": ["Forgot your password?", "Забули пароль?"],
+    "← Volver a la web": ["← Back to the website", "← Назад на сайт"],
+    "← Volver a iniciar sesión": ["← Back to sign in", "← Назад до входу"],
+    "(vacío si es instalación propia)": ["(empty for a self-hosted install)", "(порожньо для власної інсталяції)"],
+    "Tu correo electrónico": ["Your email address", "Ваша електронна пошта"],
+    "Enviar enlace de recuperación": ["Send recovery link", "Надіслати посилання для відновлення"],
+    "Indica tu correo electrónico (lo necesitas para recuperar tu cuenta).": [
+      "Enter your email (you'll need it to recover your account).", "Вкажіть вашу пошту (вона потрібна для відновлення акаунта)."],
+    "Debes aceptar los Términos de Servicio y la Política de Privacidad.": [
+      "You must accept the Terms of Service and Privacy Policy.", "Ви маєте прийняти Умови надання послуг і Політику конфіденційності."],
+    "Nombre de empresa y contraseña (mín. 6).": ["Company name and password (min. 6).", "Назва компанії та пароль (мін. 6)."],
+    "Error de red. Inténtalo de nuevo.": ["Network error. Try again.", "Помилка мережі. Спробуйте ще раз."],
+    "Si ese correo existe en nuestro sistema, te hemos enviado un enlace para restablecer la contraseña.": [
+      "If that email exists in our system, we've sent a link to reset the password.",
+      "Якщо ця пошта є в нашій системі, ми надіслали посилання для скидання пароля."],
+    "Acepto los ": ["I accept the ", "Я приймаю "],
+    " y la ": [" and the ", " і "],
+    "Términos de Servicio": ["Terms of Service", "Умови надання послуг"],
+    "Política de Privacidad": ["Privacy Policy", "Політику конфіденційності"],
+
+    // ── Conexiones (Import/API view) — remaining fragments ──────────────────────────
+    "Puntos (las paradas a visitar)": ["Points (stops to visit)", "Точки (для відвідування)"],
+    "Trabajadores (tu personal de campo)": ["Workers (your field staff)", "Працівники (ваш польовий персонал)"],
+    "Sube un archivo ": ["Upload a file ", "Завантажте файл "],
+    " con tus puntos o trabajadores. Te dejamos asignar cada columna antes de importar.": [
+      " with your points or workers. You'll map each column before importing.",
+      " із вашими точками чи працівниками. Ви призначите кожну колонку перед імпортом."],
+    "Si añades el ": ["If you add the ", "Якщо ви додасте "],
+    "teléfono del trabajador": ["worker's phone", "телефон працівника"],
+    ", la parada queda asignada a esa persona automáticamente. Las coordenadas se rellenan solas en el primer check-in.": [
+      ", the stop is assigned to that person automatically. Coordinates fill in on the first check-in.",
+      ", точка призначається цій людині автоматично. Координати заповнюються самі під час першого чек-іну."],
+    "El ": ["The ", ""],
+    "teléfono": ["phone", "телефон"],
+    " es la clave: cuando el trabajador comparte su número en el bot, se enlaza con esta ficha. Escríbelo con prefijo de país (ej. ": [
+      " is the key: when the worker shares their number in the bot, it links to this record. Write it with the country prefix (e.g. ",
+      " — ключ: коли працівник ділиться номером у боті, він привʼязується до цього запису. Пишіть із кодом країни (напр. "],
+    "Teléfono del trabajador": ["Worker's phone", "Телефон працівника"],
+    "El cliente empuja su catálogo y lee las visitas por API. Se autentica con la cabecera ": [
+      "The client pushes their catalog and reads visits via API. It authenticates with the header ",
+      "Клієнт надсилає свій каталог і читає візити через API. Автентифікація за заголовком "],
+    ". Estado: ": [". Status: ", ". Статус: "],
+    "Tu clave de API (": ["Your API key (", "Ваш API-ключ ("],
+    "Generando tu clave…": ["Generating your key…", "Генеруємо ваш ключ…"],
+    "Esta es la clave única de tu empresa. Entrégasela a quien integre tu sistema. Si la regeneras, la anterior deja de funcionar de inmediato.": [
+      "This is your company's unique key. Give it to whoever integrates your system. If you regenerate it, the old one stops working immediately.",
+      "Це унікальний ключ вашої компанії. Передайте його тому, хто інтегрує вашу систему. Якщо перегенеруєте, старий одразу перестане працювати."],
+    "Cargar trabajadores — ": ["Load workers — ", "Завантажити працівників — "],
+    "Cargar puntos (sin coordenadas) — ": ["Load points (no coordinates) — ", "Завантажити точки (без координат) — "],
+    " (opcional) enlaza el punto con su trabajador asignado. Las coordenadas se rellenan solas en el ": [
+      " (optional) links the point to its assigned worker. Coordinates fill in on the ",
+      " (необовʼязково) звʼязує точку з призначеним працівником. Координати заповнюються під час "],
+    "primer check-in": ["first check-in", "першого чек-іну"],
+    " de cada punto.": [" of each point.", " кожної точки."],
+    "Leer visitas — ": ["Read visits — ", "Читати візити — "],
+    "Crea las pestañas ": ["Create the ", "Створіть вкладки "],
+    " (con cabeceras) en tu hoja conectada. Se puede ejecutar de nuevo sin riesgo — nunca borra datos.": [
+      " tabs (with headers) in your connected sheet. Safe to run again — never deletes data.",
+      " (із заголовками) у підключеній таблиці. Безпечно запускати знову — дані ніколи не видаляються."],
+
+    // ── Ajustes — remaining fragments ────────────────────────────────────────────
+    "Empresa:": ["Company:", "Компанія:"],
+    "La contraseña de esta instalación se define con la variable ": [
+      "This installation's password is set via the ", "Пароль цієї інсталяції задається змінною "],
+    " del servidor.": [" on the server.", " на сервері."],
+    "Tus datos": ["Your data", "Ваші дані"],
+    "Exportar todos mis datos": ["Export all my data", "Експортувати всі мої дані"],
+    "Descarga un archivo con todos tus puntos, trabajadores y visitas — por si necesitas una copia o quieres migrar de plataforma.": [
+      "Download a file with all your points, workers, and visits — in case you need a copy or want to switch platforms.",
+      "Завантажте файл з усіма вашими точками, працівниками та візитами — про всяк випадок або для переходу на іншу платформу."],
+    "StarX usa ": ["StarX uses ", "StarX використовує "],
+    "un único bot compartido": ["a single shared bot", "єдиного спільного бота"],
+    ", ya configurado por la plataforma — tú solo lo enciendes o apagas aquí, no hay tokens que gestionar.": [
+      ", already configured by the platform — you just turn it on or off here, no tokens to manage.",
+      ", вже налаштованого платформою — ви лише вмикаєте чи вимикаєте його тут, без токенів для керування."],
+    "Carga a tus trabajadores con su ": ["Load your workers with their ", "Завантажте своїх працівників за "],
+    " (en ": [" (in ", " (у "],
+    " o por importación/API).": [" or via import/API).", " або через імпорт/API)."],
+    "El trabajador abre el bot y pulsa ": ["The worker opens the bot and taps ", "Працівник відкриває бота і натискає "],
+    " (o usa el enlace de abajo).": [" (or uses the link below).", " (або використовує посилання нижче)."],
+    "Comparte su número de teléfono y queda enlazado a ": [
+      "They share their phone number and get linked to ", "Ділиться номером телефону й привʼязується до "],
+    "tu empresa": ["your company", "вашої компанії"],
+    " automáticamente.": [" automatically.", " автоматично."],
+    "Pulsa ": ["Taps ", "Натискає "],
+    ", elige una parada y hace su check-in con ubicación y foto.": [
+      ", picks a stop, and checks in with location and photo.", ", обирає точку і робить чек-ін з локацією та фото."],
+    "Enlace de alta para tus trabajadores": ["Sign-up link for your workers", "Посилання для реєстрації працівників"],
+    "Se genera al conectar el bot…": ["Generated once the bot connects…", "Генерується після підключення бота…"],
+    "Compártelo por WhatsApp/Telegram. Quien lo abra se registrará en ": [
+      "Share it via WhatsApp/Telegram. Whoever opens it will register in ",
+      "Поділіться через WhatsApp/Telegram. Той, хто відкриє, зареєструється в "],
+    " (código ": [" (code ", " (код "],
+    "Si el botón ": ["If the ", "Якщо кнопка "],
+    " aparece deshabilitado, el operador de la plataforma aún no ha configurado el token del bot en el servidor.": [
+      " button is disabled, the platform operator hasn't configured the bot token on the server yet.",
+      " неактивна, оператор платформи ще не налаштував токен бота на сервері."],
+    "Permite que tus trabajadores hagan check-in desde el navegador (además del bot). Entran en la pantalla de login con su ": [
+      "Lets your workers check in from the browser (in addition to the bot). They log in with their ",
+      "Дозволяє вашим працівникам відмічатися з браузера (окрім бота). Вони входять за "],
+    " (el mismo que cargaste).": [" (the same one you loaded).", " (тим самим, що ви завантажили)."],
+    "Activa — los trabajadores pueden entrar por teléfono.": [
+      "On — workers can log in by phone.", "Увімкнено — працівники можуть входити за телефоном."],
+    "Desactivada.": ["Off.", "Вимкнено."],
+    "Exige una ": ["Requires a ", "Вимагає "],
+    "foto": ["photo", "фото"],
+    " en cada check-in (bot y app). Si está activo, no se acepta un check-in sin foto.": [
+      " on every check-in (bot and app). When on, a check-in without a photo is rejected.",
+      " при кожному чек-іні (бот і застосунок). Якщо увімкнено, чек-ін без фото не приймається."],
+    "Obligatoria — no se acepta un check-in sin foto.": ["Required — a check-in without a photo is rejected.", "Обовʼязково — чек-ін без фото не приймається."],
+    "Opcional — el trabajador puede fichar sin foto.": ["Optional — the worker can check in without a photo.", "Необовʼязково — працівник може відмітитися без фото."],
+    "desactivado": ["disabled", "вимкнено"],
+    "El conector acepta peticiones con la clave de abajo (cabecera X-API-Key).": [
+      "The connector accepts requests with the key below (X-API-Key header).",
+      "Конектор приймає запити з ключем нижче (заголовок X-API-Key)."],
+    "activa": ["active", "активна"],
+    "prueba": ["trial", "пробний"],
+    "pago pendiente": ["payment due", "очікується оплата"],
+    "cancelada": ["canceled", "скасовано"],
+    "El cobro no está configurado en este servidor (modo autoalojado).": [
+      "Billing isn't configured on this server (self-hosted mode).", "Оплата не налаштована на цьому сервері (режим самостійного розміщення)."],
+    "Prueba": ["Trial", "Пробний"],
+    "Básico": ["Basic", "Базовий"],
+
+    // ── Points table ──────────────────────────────────────────────────────────────
+    "Actividad": ["Activity", "Активність"],
+    "visita": ["visit", "візит"],
+    "visitas": ["visits", "візити"],
+    "última {d}": ["last {d}", "останній {d}"],
+
+    // ── Workers table ─────────────────────────────────────────────────────────────
+    "Paradas (hoy)": ["Stops (today)", "Точки (сьогодні)"],
+    "Último check-in": ["Last check-in", "Останній чек-ін"],
+
+    // ── Visits table ──────────────────────────────────────────────────────────────
+    "Ver": ["View", "Переглянути"],
+    "mapa ↗": ["map ↗", "карта ↗"],
+
+    // ── Stats: attention cards ────────────────────────────────────────────────────
+    "Todo en orden": ["All good", "Усе гаразд"],
+
+    // ── Bot status (dynamic HTML via LF.tf) ──────────────────────────────────────
+    "el bot": ["the bot", "бота"],
+    "abrir {u}": ["open {u}", "відкрити {u}"],
+    "El bot {b} está en línea recibiendo check-ins.": [
+      "The bot {b} is online receiving check-ins.", "Бот {b} онлайн і приймає чек-іни."],
+
+    // ── Billing detail (dynamic via LF.tf) ───────────────────────────────────────
+    "Límites: {w} trabajadores · {p} puntos.": ["Limits: {w} workers · {p} points.", "Ліміти: {w} працівників · {p} точок."]
   };
 
   // ── Rich-text keys (element innerHTML via data-i18n) ──────────────────────────

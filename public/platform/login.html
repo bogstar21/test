@@ -39,13 +39,14 @@
       padding:10px 12px; border-radius:12px; font-size:13px; margin-bottom:16px; }
     .codebox { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:18px; font-weight:700;
       padding:12px; border-radius:12px; background:#f2efe7; border:1px solid var(--line-2); text-align:center; letter-spacing:.02em; }
-    .tabs { display:flex; align-items:stretch; gap:6px; margin:0 0 20px; padding:4px; border-radius:13px;
-      border:1px solid var(--line); background:#f2efe7; }
-    .tab { flex:1 1 0; display:flex; align-items:center; justify-content:center; text-align:center; white-space:nowrap;
-      padding:9px 6px; border-radius:9px; border:0; background:transparent; color:var(--dim);
-      font:inherit; font-size:13px; font-weight:600; cursor:pointer; transition:background .14s, color .14s; }
-    .tab.on { background:var(--card); color:var(--ink); box-shadow:0 1px 3px rgba(0,0,0,.08); }
+    .role-select { position:relative; margin-bottom:20px; }
+    .role-select select { appearance:none; -webkit-appearance:none; cursor:pointer; padding-right:36px;
+      font-weight:600; background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath fill='none' stroke='%236b665b' stroke-width='1.4' d='M1 1l4 4 4-4'/%3E%3C/svg%3E");
+      background-repeat:no-repeat; background-position:right 14px center; }
+    .role-select label { margin-bottom:6px; }
     .hide { display:none; }
+    .login-link { display:block; text-align:center; margin-top:16px; color:var(--dim); font-size:13px; text-decoration:none; }
+    .login-link:hover { color:var(--ink); }
     .langsw { position:fixed; top:16px; right:16px; display:inline-flex; padding:3px; gap:2px; border-radius:10px;
       border:1px solid var(--line); background:var(--card); }
     .langsw button { width:auto; margin:0; padding:4px 8px; border:0; background:transparent; color:var(--dim);
@@ -72,15 +73,16 @@
     <a class="brand" href="/" aria-label="StarX — inicio">StarX</a>
     <p class="sub">Plataforma de check-in de campo</p>
 
-    <div class="tabs">
-      <button type="button" class="tab on" id="tab-mgr">Gestor</button>
-      <button type="button" class="tab" id="tab-wrk">Trabajador</button>
-      <button type="button" class="tab" id="tab-new">Crear empresa</button>
+    <div class="role-select">
+      <label for="role-picker">Tipo de acceso</label>
+      <select id="role-picker">
+        <option value="mgr">Gestor</option>
+        <option value="wrk">Trabajador</option>
+      </select>
     </div>
 
     <div class="err" id="err" style="display:none">Contraseña incorrecta. Inténtalo de nuevo.</div>
     <div class="err" id="werr" style="display:none"></div>
-    <div class="err" id="serr" style="display:none"></div>
     <div class="err hide" id="ferr"></div>
     <div class="ok-msg hide" id="fok"></div>
 
@@ -102,28 +104,6 @@
       <button type="button" class="forgot-link" id="forgot-back">← Volver a iniciar sesión</button>
     </form>
 
-    <!-- New company: self-service signup (14-day trial) -->
-    <form id="sform" class="hide">
-      <label for="s-company">Nombre de tu empresa</label>
-      <input type="text" id="s-company" placeholder="Mi Logística S.L.">
-      <label for="s-email" style="margin-top:14px">Tu correo electrónico</label>
-      <input type="email" id="s-email" placeholder="tu@empresa.com">
-      <label for="s-pass" style="margin-top:14px">Contraseña de gestor</label>
-      <input type="password" id="s-pass" autocomplete="new-password" placeholder="mínimo 6 caracteres">
-      <label class="terms-row"><input type="checkbox" id="s-terms">
-        <span>Acepto los <a href="/terms" target="_blank">Términos de Servicio</a> y la <a href="/privacy" target="_blank">Política de Privacidad</a>.</span>
-      </label>
-      <button type="submit">Crear empresa y empezar prueba</button>
-      <p style="color:#9aa0a6;font-size:12px;margin:12px 0 0">14 días de prueba gratis, sin tarjeta.</p>
-    </form>
-
-    <!-- Signup success: shows the company code the manager needs to log in later -->
-    <div id="sdone" class="hide">
-      <p style="font-size:14px;margin:0 0 8px">Empresa creada. Guarda tu <b>código de empresa</b> — lo necesitarás para iniciar sesión:</p>
-      <div id="scode" class="codebox"></div>
-      <button type="button" id="sgo">Ir a la plataforma</button>
-    </div>
-
     <!-- Worker: phone (PWA check-in) + optional company code -->
     <form id="wform" class="hide">
       <label for="phone">Tu número de teléfono</label>
@@ -132,36 +112,33 @@
       <input type="text" id="code" name="code" autocomplete="off" placeholder="solo si te lo pidieron">
       <button type="submit">Entrar</button>
     </form>
+
+    <a class="login-link" href="/platform/signup">¿No tienes cuenta? Crea tu empresa →</a>
   </div>
 
-  <script src="/platform/assets/i18n.js?v=24"></script>
+  <script src="/platform/assets/i18n.js?v=25"></script>
   <script>
     var p = new URLSearchParams(location.search);
     if (p.get("e")) document.getElementById("err").style.display = "block";
     var next = p.get("next");
     if (next) document.getElementById("form").action = "/auth/login?next=" + encodeURIComponent(next);
-    // Deep-link a tab from the landing page: ?tab=new (signup) | worker | mgr (default).
+    // Deep-link the role from the landing page: ?tab=worker (mgr is the default).
     var wantTab = p.get("tab");
 
-    var tabM = document.getElementById("tab-mgr"), tabW = document.getElementById("tab-wrk"), tabN = document.getElementById("tab-new");
-    var fM = document.getElementById("form"), fW = document.getElementById("wform"), fS = document.getElementById("sform");
-    var eM = document.getElementById("err"), eW = document.getElementById("werr"), eS = document.getElementById("serr");
-    function pick(which) { // "mgr" | "wrk" | "new"
-      tabM.classList.toggle("on", which === "mgr");
-      tabW.classList.toggle("on", which === "wrk");
-      tabN.classList.toggle("on", which === "new");
+    var rolePicker = document.getElementById("role-picker");
+    var fM = document.getElementById("form"), fW = document.getElementById("wform");
+    var eM = document.getElementById("err"), eW = document.getElementById("werr");
+    function pick(which) { // "mgr" | "wrk"
       fM.classList.toggle("hide", which !== "mgr");
       fW.classList.toggle("hide", which !== "wrk");
-      fS.classList.toggle("hide", which !== "new");
-      eM.style.display = eW.style.display = eS.style.display = "none";
+      eM.style.display = eW.style.display = "none";
     }
-    tabM.onclick = function () { pick("mgr"); document.getElementById("password").focus(); };
-    tabW.onclick = function () { pick("wrk"); document.getElementById("phone").focus(); };
-    tabN.onclick = function () { pick("new"); document.getElementById("s-company").focus(); };
-    document.getElementById("sgo").onclick = function () { location.href = "/platform"; };
+    rolePicker.onchange = function () {
+      pick(rolePicker.value);
+      document.getElementById(rolePicker.value === "wrk" ? "phone" : "password").focus();
+    };
     // Honour ?tab= from the landing page CTAs.
-    if (wantTab === "new") pick("new");
-    else if (wantTab === "worker") pick("wrk");
+    if (wantTab === "worker") { rolePicker.value = "wrk"; pick("wrk"); }
 
     // Forgot password: a sub-state of the Gestor tab, not one of the three main tabs.
     var fForm = document.getElementById("fform"), fErr = document.getElementById("ferr"), fOk = document.getElementById("fok");
@@ -188,32 +165,6 @@
         fOk.classList.remove("hide");
         fForm.querySelector("input").value = "";
       } catch (err) { fErr.textContent = "Error de red. Inténtalo de nuevo."; fErr.classList.remove("hide"); }
-    });
-
-    fS.addEventListener("submit", async function (e) {
-      e.preventDefault();
-      eS.style.display = "none";
-      var company = document.getElementById("s-company").value.trim();
-      var email = document.getElementById("s-email").value.trim();
-      var pass = document.getElementById("s-pass").value;
-      var acceptedTerms = document.getElementById("s-terms").checked;
-      if (!company || pass.length < 6) { eS.textContent = "Nombre de empresa y contraseña (mín. 6)."; eS.style.display = "block"; return; }
-      if (!email) { eS.textContent = "Indica tu correo electrónico (lo necesitas para recuperar tu cuenta)."; eS.style.display = "block"; return; }
-      if (!acceptedTerms) { eS.textContent = "Debes aceptar los Términos de Servicio y la Política de Privacidad."; eS.style.display = "block"; return; }
-      try {
-        var res = await fetch("/auth/signup", {
-          method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ company: company, email: email, password: pass, acceptedTerms: acceptedTerms }),
-        });
-        var data = await res.json().catch(function () { return {}; });
-        if (!res.ok) { eS.textContent = data.detail || "No se pudo crear la empresa."; eS.style.display = "block"; return; }
-        // Show the company code so the manager can save it for future logins.
-        if (data.code) {
-          document.getElementById("scode").textContent = data.code;
-          fS.classList.add("hide");
-          document.getElementById("sdone").classList.remove("hide");
-        } else { location.href = "/platform"; }
-      } catch (err) { eS.textContent = "Error de red. Inténtalo de nuevo."; eS.style.display = "block"; }
     });
 
     fW.addEventListener("submit", async function (e) {

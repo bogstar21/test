@@ -13,6 +13,9 @@ function mountPlatformRoutes(app) {
   app.get("/platform/login", (_req, res) =>
     res.sendFile(path.join(config.PUBLIC_DIR, "platform", "login.html")));
 
+  app.get("/platform/signup", (_req, res) =>
+    res.sendFile(path.join(config.PUBLIC_DIR, "platform", "signup.html")));
+
   app.get("/platform/reset", (_req, res) =>
     res.sendFile(path.join(config.PUBLIC_DIR, "platform", "reset.html")));
 

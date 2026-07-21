@@ -498,9 +498,9 @@
         var worker = p.workerName ? esc(p.workerName) : '<span class="muted">— sin asignar —</span>';
         var st = stats[String(p.id)] || { count: 0, last: "" };
         var activity = st.count
-          ? '<b>' + st.count + '</b> ' + (st.count === 1 ? "visita" : "visitas") +
-            '<div class="muted" style="font-size:11.5px">última ' + esc(String(st.last).slice(0, 10)) + '</div>'
-          : '<span class="muted">sin visitas</span>';
+          ? '<b>' + st.count + '</b> ' + window.LF.t(st.count === 1 ? "visita" : "visitas") +
+            '<div class="muted" style="font-size:11.5px">' + window.LF.tf("última {d}", { d: esc(String(st.last).slice(0, 10)) }) + '</div>'
+          : '<span class="muted">' + window.LF.t("sin visitas") + '</span>';
         var check = state.isAdmin
           ? '<td data-label=""><input type="checkbox" class="row-check" data-check-point="' + p.row + '"' + (selectedPoints[p.row] ? " checked" : "") + "></td>"
           : "";
@@ -1053,9 +1053,9 @@
     pill.className = "pill " + (on ? "on" : "off");
     pill.textContent = on ? "en línea" : "apagado";
     if (on) {
-      var uname = s.username ? ("@" + esc(s.username)) : "el bot";
-      var link = s.username ? ' — <a href="https://t.me/' + esc(s.username) + '" target="_blank" rel="noopener">abrir ' + uname + "</a>" : "";
-      $("#bot-status").innerHTML = "El bot <b>" + uname + "</b> está en línea recibiendo check-ins." + link;
+      var uname = s.username ? ("@" + esc(s.username)) : window.LF.t("el bot");
+      var link = s.username ? ' — <a href="https://t.me/' + esc(s.username) + '" target="_blank" rel="noopener">' + window.LF.tf("abrir {u}", { u: uname }) + "</a>" : "";
+      $("#bot-status").innerHTML = window.LF.tf("El bot {b} está en línea recibiendo check-ins.", { b: "<b>" + uname + "</b>" }) + link;
     } else if (!configured) {
       $("#bot-status").textContent = "El bot aún no está configurado en el servidor (falta TELEGRAM_TOKEN).";
     } else {
@@ -1269,8 +1269,8 @@
     var pwaOn = !!(s && s.pwaEnabled);
     var ps = $("#pwa-status");
     if (ps) ps.innerHTML = pwaOn
-      ? '<span class="dot dot-ok"></span> Activa — los trabajadores pueden entrar por teléfono.'
-      : '<span class="dot dot-muted"></span> Desactivada.';
+      ? '<span class="dot dot-ok"></span> ' + window.LF.t("Activa — los trabajadores pueden entrar por teléfono.")
+      : '<span class="dot dot-muted"></span> ' + window.LF.t("Desactivada.");
     var pt = $("#pwa-toggle");
     if (pt) pt.innerHTML = '<svg class="ic"><use href="#i-power"/></svg> ' + (pwaOn ? "Desactivar PWA" : "Activar PWA");
 
@@ -1278,8 +1278,8 @@
     var photoOn = !!(s && s.photoRequired);
     var phs = $("#photo-status");
     if (phs) phs.innerHTML = photoOn
-      ? '<span class="dot dot-ok"></span> Obligatoria — no se acepta un check-in sin foto.'
-      : '<span class="dot dot-muted"></span> Opcional — el trabajador puede fichar sin foto.';
+      ? '<span class="dot dot-ok"></span> ' + window.LF.t("Obligatoria — no se acepta un check-in sin foto.")
+      : '<span class="dot dot-muted"></span> ' + window.LF.t("Opcional — el trabajador puede fichar sin foto.");
     var pht = $("#photo-toggle");
     if (pht) pht.innerHTML = '<svg class="ic"><use href="#i-power"/></svg> ' + (photoOn ? "Hacer opcional" : "Hacer obligatoria");
 
@@ -1345,8 +1345,10 @@
       detail = "Suscripción inactiva: la cuenta está en solo-lectura. Reactívala para volver a registrar datos.";
     } else {
       var lim = b.limits || {};
-      detail = "Límites: " + (lim.maxWorkers == null ? "∞" : lim.maxWorkers) + " trabajadores · " +
-        (lim.maxPoints == null ? "∞" : lim.maxPoints) + " puntos.";
+      detail = window.LF.tf("Límites: {w} trabajadores · {p} puntos.", {
+        w: lim.maxWorkers == null ? "∞" : lim.maxWorkers,
+        p: lim.maxPoints == null ? "∞" : lim.maxPoints,
+      });
     }
     $("#bill-detail").textContent = detail;
 
