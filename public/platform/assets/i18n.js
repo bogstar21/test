@@ -441,6 +441,19 @@
     // ── Workers table ─────────────────────────────────────────────────────────────
     "Paradas (hoy)": ["Stops (today)", "Точки (сьогодні)"],
     "Último check-in": ["Last check-in", "Останній чек-ін"],
+    "Trabajador": ["Worker", "Працівник"],
+    "Vinculado": ["Linked", "Прив'язаний"],
+    "enlazado": ["linked", "прив'язаний"],
+    "sin vincular": ["not linked", "не прив'язаний"],
+
+    // ── Workers KPI summary row (view-workers) ────────────────────────────────────
+    "Activos": ["Active", "Активні"],
+    "en el equipo": ["on the team", "у команді"],
+    "estado activo": ["active status", "активний статус"],
+    "Vinculados": ["Linked", "Прив'язані"],
+    "con el bot de Telegram": ["with the Telegram bot", "з Telegram-ботом"],
+    "con el bot · {n} sin vincular": ["with the bot · {n} not linked", "з ботом · {n} не прив'язано"],
+    "hechas / asignadas": ["done / assigned", "виконано / призначено"],
 
     // ── Visits table ──────────────────────────────────────────────────────────────
     "Ver": ["View", "Переглянути"],

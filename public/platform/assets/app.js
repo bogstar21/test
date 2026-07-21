@@ -594,6 +594,32 @@
     catch (e) { toast(e.message, true); }
   }
 
+  // Small circular initials avatar, colored by active/inactive state.
+  function initialsAvatar(name, active) {
+    var initials = String(name || "?").trim().split(/\s+/).slice(0, 2).map(function (s) { return s[0]; }).join("").toUpperCase() || "?";
+    return '<div class="worker-avatar' + (active === false ? " off" : "") + '">' + esc(initials) + "</div>";
+  }
+  function renderWorkersKpis(rows, covByWid, assignedByWid) {
+    var totalEl = $("#wk-total"), activeEl = $("#wk-active"), linkedEl = $("#wk-linked"), todayEl = $("#wk-today");
+    if (!totalEl) return;
+    var active = rows.filter(function (w) { return w.active !== false; }).length;
+    var linked = rows.filter(function (w) { return w.telegramId; }).length;
+    var unlinked = rows.length - linked;
+    var doneToday = 0, assignedToday = 0;
+    rows.forEach(function (w) {
+      var cov = covByWid[w.workerId];
+      var assigned = cov ? cov.assigned : (assignedByWid[w.workerId] || 0);
+      doneToday += cov ? (cov.visitedToday || 0) : 0;
+      assignedToday += assigned || 0;
+    });
+    totalEl.textContent = rows.length;
+    activeEl.textContent = active;
+    linkedEl.textContent = linked;
+    $("#wk-linked-sub").textContent = unlinked
+      ? window.LF.tf("con el bot · {n} sin vincular", { n: unlinked })
+      : window.LF.t("con el bot de Telegram");
+    todayEl.textContent = doneToday + "/" + assignedToday;
+  }
   async function loadWorkers() {
     var wrap = $("#workers-wrap");
     wrap.innerHTML = skeleton();
@@ -609,12 +635,15 @@
       state.workers = data.workers;
       if (!data.workers.length) { wrap.innerHTML = '<div class="card card-pad"><div class="empty">Aún no hay trabajadores. Añade uno o importa desde Excel.</div></div>'; return; }
       var rows = data.workers.filter(workerMatches);
-      if (!rows.length) { wrap.innerHTML = '<div class="card card-pad"><div class="empty">Ningún trabajador coincide con la búsqueda.</div></div>'; return; }
 
       // Per-worker aggregates.
       var assignedByWid = {};
       points.forEach(function (p) { if (p.active !== false && p.workerId) assignedByWid[p.workerId] = (assignedByWid[p.workerId] || 0) + 1; });
       var covByWid = {}; (stats.coverage || []).forEach(function (c) { covByWid[c.workerId] = c; });
+      renderWorkersKpis(data.workers, covByWid, assignedByWid);
+
+      if (!rows.length) { wrap.innerHTML = '<div class="card card-pad"><div class="empty">Ningún trabajador coincide con la búsqueda.</div></div>'; return; }
+
       var byWorker = stats.byWorker || {};
       var lastByKey = {};
       (stats.recent || []).forEach(function (v) {
@@ -623,7 +652,7 @@
         });
       });
 
-      var heads = ["Nombre", "Teléfono", "Paradas (hoy)", "Check-ins", "Último check-in", "Estado"];
+      var heads = ["Trabajador", "Vinculado", "Paradas (hoy)", "Check-ins", "Último check-in", "Estado"];
       if (state.isAdmin) heads.push("Acciones");
       wrap.innerHTML = tableWrap(heads, rows.map(function (w) {
         var cov = covByWid[w.workerId];
@@ -635,8 +664,14 @@
           ? '<b>' + doneToday + '</b><span class="muted">/' + assigned + '</span>'
           : '<span class="muted">— sin asignar —</span>';
         var lastCell = last ? fmtTime(last) : '<span class="muted">nunca</span>';
-        return '<tr><td data-label="Nombre">' + esc(w.name) + (w.telegramId ? '' : ' <span class="pill off" title="Aún no ha abierto el bot">sin Telegram</span>') + '</td>' +
-          '<td data-label="Teléfono">' + esc(w.phone) + '</td>' +
+        var whoCell = '<div class="worker-who">' + initialsAvatar(w.name, w.active) +
+          '<div class="worker-meta"><div class="worker-name">' + esc(w.name) + '</div>' +
+          '<div class="worker-phone">' + esc(w.phone || "—") + '</div></div></div>';
+        var linkedCell = w.telegramId
+          ? '<span class="pill on" title="ID ' + esc(w.telegramId) + '">enlazado</span>'
+          : '<span class="pill off" title="Aún no ha abierto el bot">sin vincular</span>';
+        return '<tr><td data-label="Trabajador">' + whoCell + '</td>' +
+          '<td data-label="Vinculado">' + linkedCell + '</td>' +
           '<td data-label="Paradas (hoy)" title="Paradas hechas hoy / asignadas">' + assignedCell + '</td>' +
           '<td data-label="Check-ins">' + total + '</td>' +
           '<td data-label="Último check-in" class="muted">' + lastCell + '</td>' +
