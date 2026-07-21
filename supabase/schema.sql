@@ -32,11 +32,13 @@ create table if not exists public.starx_tenants (
   reset_token_expires timestamptz,                 -- reset link dies after this
   plan                text default 'trial',        -- trial | basic | pro | business
   subscription_status text default 'trialing',     -- trialing | active | past_due | canceled
+  past_due_since      timestamptz,                 -- when a failed payment started the grace window
   trial_ends_at       timestamptz,
   stripe_customer_id  text default '',
   active              boolean default true,
   created_at          timestamptz default now()
 );
+alter table public.starx_tenants add column if not exists past_due_since      timestamptz;
 alter table public.starx_tenants add column if not exists email               text default '';
 alter table public.starx_tenants add column if not exists reset_token_hash    text default '';
 alter table public.starx_tenants add column if not exists reset_token_expires timestamptz;
@@ -150,6 +152,20 @@ create table if not exists public.starx_audit (
 );
 create index if not exists idx_starx_audit_tenant on public.starx_audit (tenant_id, created_at desc);
 alter table public.starx_audit enable row level security;
+
+-- ── Application logs (platform-wide, for the operator analytics page) ───────────────
+-- warn/error entries from logger.js persist here so /admin/analytics shows real history
+-- that survives restarts (info-level is not stored — see logger.js). Newest-first reads.
+create table if not exists public.starx_logs (
+  pk         bigint generated always as identity primary key,
+  ts         timestamptz default now(),
+  level      text default 'info',    -- info | warn | error (info not persisted)
+  message    text default '',
+  meta       text,                   -- JSON string (stack, request context, …)
+  created_at timestamptz default now()
+);
+create index if not exists idx_starx_logs_ts on public.starx_logs (ts desc);
+alter table public.starx_logs enable row level security;
 
 -- ── Row Level Security (defense in depth) ──────────────────────────────────────────
 -- The server connects with the service_role key, which BYPASSES RLS — so enabling RLS

@@ -12,11 +12,22 @@
 // location (see ensurePointLocation). Visits live only in our store; this is how the
 // client reads them out.
 const express = require("express");
+const rateLimit = require("express-rate-limit");
 const config  = require("../config");
 const { requireApiKey } = require("../auth");
 const { forTenant } = require("../datasource");
 
 const MAX_ROWS = 5000;
+
+// Per-tenant rate limit for the connector. The global /api limiter is keyed by IP, which
+// is wrong here: many companies may integrate from the same shared server IP (one noisy
+// client would throttle everyone). requireApiKey has already resolved the tenant, so we
+// key by tenantId and give each company its own budget.
+const connectorLimiter = rateLimit({
+  windowMs: 60 * 1000, limit: 120, standardHeaders: true, legacyHeaders: false,
+  keyGenerator: req => (req.user && req.user.tenantId) || req.ip,
+  message: { error: "rate_limited", detail: "Too many requests for this company. Slow down." },
+});
 
 // The tenant is resolved from the X-API-Key by requireApiKey (req.user.tenantId), so the
 // connector reads/writes the company that owns the key — not a hardcoded tenant.
@@ -65,7 +76,8 @@ function shapeVisit(v, base) {
 
 function mountConnectRoutes(app) {
   const r = express.Router();
-  r.use(requireApiKey);
+  r.use(requireApiKey);       // resolves the tenant from X-API-Key first…
+  r.use(connectorLimiter);    // …then throttle per that tenant
 
   r.post("/workers", async (req, res) => {
     try {

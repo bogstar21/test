@@ -22,12 +22,24 @@ const PLANS = {
 };
 function planLimits(plan) { return PLANS[plan] || PLANS.trial; }
 
-// A tenant can write (add workers/points/visits) only while its subscription is live.
-// past_due / canceled → read-only (never destructive: data is preserved, just frozen).
+// A tenant can write while its subscription is live. On a failed payment (past_due) we
+// don't lock immediately — a grace window (DUNNING_GRACE_DAYS, default 7) keeps them
+// writable so a card blip doesn't halt operations mid-day. After grace, or on cancel,
+// it's read-only (never destructive: data is preserved, just frozen).
+const DUNNING_GRACE_DAYS = parseInt(process.env.DUNNING_GRACE_DAYS || "7", 10);
+function graceEndsAt(tenant) {
+  if (!tenant || tenant.subscriptionStatus !== "past_due" || !tenant.pastDueSince) return null;
+  return new Date(Date.parse(tenant.pastDueSince) + DUNNING_GRACE_DAYS * 864e5).toISOString();
+}
 function canWrite(tenant) {
   if (!tenant) return false;
   var s = String(tenant.subscriptionStatus || "active");
-  return s === "active" || s === "trialing";
+  if (s === "active" || s === "trialing") return true;
+  if (s === "past_due") {
+    if (!tenant.pastDueSince) return true;   // legacy / unknown start → benefit of the doubt
+    return Date.now() < Date.parse(graceEndsAt(tenant));
+  }
+  return false; // canceled, unpaid-beyond-grace, etc.
 }
 
 // ── Password hashing (scrypt; format "scrypt$salt$hash") ──────────────────────────
@@ -106,6 +118,7 @@ function rowToTenant(r) {
     resetTokenExpires: r.reset_token_expires || null,
     plan: String(r.plan || "trial"),
     subscriptionStatus: String(r.subscription_status || "trialing"),
+    pastDueSince: r.past_due_since || null,
     trialEndsAt: r.trial_ends_at || null,
     stripeCustomerId: String(r.stripe_customer_id || ""),
     active: r.active !== false,
@@ -171,6 +184,7 @@ async function update(id, patch) {
     const dbPatch = {};
     if (patch.plan != null) dbPatch.plan = patch.plan;
     if (patch.subscriptionStatus != null) dbPatch.subscription_status = patch.subscriptionStatus;
+    if (patch.pastDueSince !== undefined) dbPatch.past_due_since = patch.pastDueSince;
     if (patch.stripeCustomerId != null) dbPatch.stripe_customer_id = patch.stripeCustomerId;
     if (patch.trialEndsAt !== undefined) dbPatch.trial_ends_at = patch.trialEndsAt;
     if (patch.passwordHash != null) dbPatch.password_hash = patch.passwordHash;
@@ -190,6 +204,6 @@ async function update(id, patch) {
 }
 
 module.exports = {
-  PLANS, planLimits, canWrite, hashPassword, verifyPassword,
+  PLANS, planLimits, canWrite, graceEndsAt, hashPassword, verifyPassword,
   all, defaultTenant, byId, byCode, byEmail, get, reload, create, update, slugify, envDefault,
 };

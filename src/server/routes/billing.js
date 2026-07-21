@@ -38,6 +38,7 @@ function mountBillingRoutes(app) {
       status: t.subscriptionStatus || "active",
       canWrite: config.tenants.canWrite(t),
       trialEndsAt: t.trialEndsAt || null,
+      graceEndsAt: config.tenants.graceEndsAt(t),
       limits: { maxWorkers: limits.maxWorkers === Infinity ? null : limits.maxWorkers, maxPoints: limits.maxPoints === Infinity ? null : limits.maxPoints },
       hasCustomer: !!t.stripeCustomerId,
     });

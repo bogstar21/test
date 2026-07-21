@@ -107,11 +107,17 @@ function mountAdminRoutes(app) {
     }
   });
 
-  // Live log tail: incremental — client passes ?after=<last id> and gets only newer
-  // entries, so the page can poll cheaply. In-memory / per-process (see logger.js).
-  app.get("/admin/analytics/logs", requireSuperAdmin, (req, res) => {
-    const after = parseInt(req.query.after, 10) || 0;
-    res.json({ logs: logger.recent(after) });
+  // Log history for the operator page: persisted warn/error rows (newest first) when a
+  // platform DB exists, else this process's in-memory buffer. Loaded on demand + refresh —
+  // not a mandatory live stream. Supports ?limit= and ?level=info|warn|error.
+  app.get("/admin/analytics/logs", requireSuperAdmin, async (req, res) => {
+    try {
+      const logs = await logger.history({ limit: req.query.limit, level: req.query.level });
+      res.json({ logs });
+    } catch (e) {
+      console.error("/admin/analytics/logs error:", e && e.message);
+      res.status(500).json({ error: "server_error" });
+    }
   });
 }
 

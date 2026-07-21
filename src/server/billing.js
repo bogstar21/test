@@ -111,7 +111,7 @@ async function handleEvent(event) {
   const tenantId = (obj.metadata && obj.metadata.tenant_id) || obj.client_reference_id || "";
   switch (event.type) {
     case "checkout.session.completed": {
-      const patch = { subscriptionStatus: "active" };
+      const patch = { subscriptionStatus: "active", pastDueSince: null };
       if (obj.customer) patch.stripeCustomerId = obj.customer;
       if (tenantId) await tenants.update(tenantId, patch);
       break;
@@ -123,6 +123,8 @@ async function handleEvent(event) {
       const priceId = obj.items && obj.items.data && obj.items.data[0] && obj.items.data[0].price && obj.items.data[0].price.id;
       const patch = { subscriptionStatus: status };
       if (priceId) patch.plan = planForPrice(priceId);
+      // Back to good standing → clear the dunning clock.
+      if (status === "active") patch.pastDueSince = null;
       if (tenantId) await tenants.update(tenantId, patch);
       break;
     }
@@ -130,7 +132,27 @@ async function handleEvent(event) {
       if (tenantId) await tenants.update(tenantId, { subscriptionStatus: "canceled" });
       break;
     case "invoice.payment_failed":
-      if (tenantId) await tenants.update(tenantId, { subscriptionStatus: "past_due" });
+      if (tenantId) {
+        const t = tenants.byId(tenantId);
+        // Start the grace clock only on the FIRST failure of a dunning cycle, so retries
+        // don't keep pushing the deadline out.
+        const patch = { subscriptionStatus: "past_due" };
+        if (!t || t.subscriptionStatus !== "past_due" || !t.pastDueSince) {
+          patch.pastDueSince = new Date().toISOString();
+        }
+        const updated = await tenants.update(tenantId, patch);
+        // Reminder email (best-effort) with the reactivation deadline.
+        if (updated && updated.email) {
+          const grace = tenants.graceEndsAt(updated);
+          require("./email").send({
+            to: updated.email,
+            subject: "StarX — problema con tu pago",
+            text: "No pudimos procesar tu último pago. Actualiza tu método de pago desde " +
+              "Ajustes → Tu suscripción para no perder acceso de escritura" +
+              (grace ? " (tienes hasta el " + grace.slice(0, 10) + ")." : "."),
+          }).catch(e => console.error("dunning email:", e && e.message));
+        }
+      }
       break;
   }
 }

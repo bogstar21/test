@@ -89,13 +89,19 @@
 
     <div class="card">
       <div class="head">
-        <h2><span class="dot-live" id="log-dot"></span> Logs en vivo</h2>
+        <h2>Historial de logs</h2>
         <div class="log-toggle">
-          <button class="btn-ghost" id="log-pause">Pausar</button>
-          <button class="btn-ghost" id="log-clear">Limpiar</button>
+          <select id="log-level" class="btn-ghost">
+            <option value="">Todos</option>
+            <option value="error">Errores</option>
+            <option value="warn">Avisos</option>
+            <option value="info">Info</option>
+          </select>
+          <label class="log-toggle" style="gap:5px;font-size:13px;color:var(--dim)"><input type="checkbox" id="log-auto"> Auto (30s)</label>
+          <button class="btn-ghost" id="log-refresh">Actualizar</button>
         </div>
       </div>
-      <div class="log" id="log"><div class="empty">Esperando eventos…</div></div>
+      <div class="log" id="log"><div class="empty">Cargando…</div></div>
     </div>
   </div>
 
@@ -150,52 +156,35 @@
       startLogs();
     }
 
-    // ── Live log tail (incremental polling) ──────────────────────────────────
-    var logEl = document.getElementById("log"), logDot = document.getElementById("log-dot");
-    var lastId = 0, logTimer = null, paused = false, logStarted = false;
-    function fmtLogTime(ts) { return String(ts || "").slice(11, 19); }
-    function appendLogs(logs) {
-      if (!logs.length) return;
-      var atBottom = (logEl.scrollHeight - logEl.scrollTop - logEl.clientHeight) < 40;
-      var firstReal = logEl.querySelector(".empty"); if (firstReal) logEl.innerHTML = "";
-      logs.forEach(function (e) {
-        lastId = Math.max(lastId, e.id || 0);
-        var meta = e.meta ? ' <span class="meta">' + esc(JSON.stringify(e.meta)) + '</span>' : "";
-        var div = document.createElement("div");
-        div.className = "row";
-        div.innerHTML = '<span class="t">' + esc(fmtLogTime(e.ts)) + '</span>' +
+    // ── Log history (loaded on demand + optional auto-refresh) ────────────────
+    var logEl = document.getElementById("log");
+    var logTimer = null, logStarted = false;
+    function fmtLogTime(ts) { return String(ts || "").replace("T", " ").slice(0, 19); }
+    function renderLogs(logs) {
+      if (!logs.length) { logEl.innerHTML = '<div class="empty">Sin registros para este filtro.</div>'; return; }
+      logEl.innerHTML = logs.map(function (e) {
+        var meta = e.meta ? ' <span class="meta">' + esc(typeof e.meta === "string" ? e.meta : JSON.stringify(e.meta)) + '</span>' : "";
+        return '<div class="row"><span class="t">' + esc(fmtLogTime(e.ts)) + '</span>' +
           '<span class="lv ' + esc(e.level) + '">' + esc((e.level || "").toUpperCase()) + '</span>' +
-          esc(e.message) + meta;
-        logEl.appendChild(div);
-      });
-      // Cap the DOM so a long session doesn't grow unbounded.
-      while (logEl.childElementCount > 600) logEl.removeChild(logEl.firstChild);
-      if (atBottom) logEl.scrollTop = logEl.scrollHeight;
+          esc(e.message) + meta + '</div>';
+      }).join("");
     }
-    async function pollLogs() {
-      if (paused) return;
+    async function loadLogs() {
+      var level = document.getElementById("log-level").value;
       try {
-        var res = await fetch("/admin/analytics/logs?after=" + lastId);
+        var res = await fetch("/admin/analytics/logs?limit=200" + (level ? "&level=" + level : ""));
         if (res.status === 401) { stopLogs(); gate.classList.remove("hide"); dash.classList.add("hide"); return; }
         var data = await res.json();
-        appendLogs(data.logs || []);
-      } catch (e) { /* transient — next tick retries */ }
+        renderLogs(data.logs || []);
+      } catch (e) { /* transient */ }
     }
-    function startLogs() {
-      if (logStarted) return;
-      logStarted = true;
-      pollLogs();
-      logTimer = setInterval(pollLogs, 3000);
-    }
+    function startLogs() { if (logStarted) return; logStarted = true; loadLogs(); }
     function stopLogs() { if (logTimer) clearInterval(logTimer); logTimer = null; logStarted = false; }
-    document.getElementById("log-pause").addEventListener("click", function () {
-      paused = !paused;
-      this.textContent = paused ? "Reanudar" : "Pausar";
-      logDot.classList.toggle("paused", paused);
-      if (!paused) pollLogs();
-    });
-    document.getElementById("log-clear").addEventListener("click", function () {
-      logEl.innerHTML = '<div class="empty">Limpiado. Esperando nuevos eventos…</div>';
+    document.getElementById("log-refresh").addEventListener("click", loadLogs);
+    document.getElementById("log-level").addEventListener("change", loadLogs);
+    document.getElementById("log-auto").addEventListener("change", function () {
+      if (logTimer) { clearInterval(logTimer); logTimer = null; }
+      if (this.checked) { loadLogs(); logTimer = setInterval(loadLogs, 30000); }
     });
 
     document.getElementById("form").addEventListener("submit", async function (e) {

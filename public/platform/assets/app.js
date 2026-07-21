@@ -387,7 +387,7 @@
       var sub = $("#s-points-sub");
       if (sub) {
         var un = s.totals.pointsUnassigned || 0;
-        sub.textContent = un ? (un + " sin asignar") : "paradas a visitar";
+        sub.textContent = un ? window.LF.tf("{n} sin asignar", { n: un }) : window.LF.t("paradas a visitar");
         sub.classList.toggle("warn", un > 0);
       }
       lastRecent = s.recent || [];
@@ -451,7 +451,7 @@
     var rows = Object.keys(selectedPoints).filter(function (r) { return selectedPoints[r]; });
     bar.classList.toggle("hidden", rows.length === 0);
     var cnt = $("#points-bulk-count");
-    if (cnt) cnt.textContent = rows.length + (rows.length === 1 ? " seleccionado" : " seleccionados");
+    if (cnt) cnt.textContent = window.LF.tf(rows.length === 1 ? "{n} seleccionado" : "{n} seleccionados", { n: rows.length });
   }
 
   async function loadPoints() {
@@ -518,7 +518,7 @@
     var workerId = $("#points-bulk-worker").value;
     try {
       var res = await api("/api/points/assign", { method: "POST", body: JSON.stringify({ rows: rows, workerId: workerId }) });
-      toast((res.updated || 0) + (workerId ? " puntos asignados" : " puntos sin asignar"));
+      toast(window.LF.tf(workerId ? "{n} puntos asignados" : "{n} puntos sin asignar", { n: res.updated || 0 }));
       selectedPoints = {};
       loadPoints();
     } catch (e) { toast(e.message, true); }
@@ -751,7 +751,7 @@
       a.href = url; a.download = "starx-visitas-" + new Date().toISOString().slice(0, 10) + ".csv";
       document.body.appendChild(a); a.click(); document.body.removeChild(a);
       setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
-      toast("Descargando " + visits.length + " visitas");
+      toast(window.LF.tf("Descargando {n} visitas", { n: visits.length }));
     } catch (e) { toast(e.message, true); }
   }
 
@@ -1082,7 +1082,7 @@
     var btn = $("#bot-start"); btn.disabled = true; btn.textContent = "Encendiendo…";
     try {
       var s = await api("/api/bot/start", { method: "POST" });
-      toast(s.username ? ("Bot @" + s.username + " en línea") : "Bot encendido");
+      toast(s.username ? window.LF.tf("Bot @{u} en línea", { u: s.username }) : "Bot encendido");
       renderBot(s);
     } catch (e) { toast(e.message, true); }
     finally { btn.disabled = false; btn.innerHTML = '<svg class="ic"><use href="#i-power"/></svg> Encender bot'; }
@@ -1153,7 +1153,7 @@
       var status = p.visitedToday
         ? '<span class="pill on">hecho hoy</span>'
         : '<span class="pill off">pendiente</span>';
-      var last = p.lastVisit ? "Última visita: " + fmtTime(p.lastVisit) : "Sin visitas todavía";
+      var last = p.lastVisit ? window.LF.tf("Última visita: {t}", { t: fmtTime(p.lastVisit) }) : window.LF.t("Sin visitas todavía");
       return '<div class="bl-row" style="flex-wrap:wrap">' +
         '<span class="bl-name" style="flex:1 1 auto;white-space:normal">' + esc(p.name || p.address || p.id) + '</span>' +
         status +
@@ -1194,8 +1194,8 @@
       if (!points.length) { sel.innerHTML = '<option value="">No hay paradas asignadas</option>'; }
       else {
         sel.innerHTML = points.map(function (p) {
-          var mark = p.visitedToday ? " — hecho hoy" : "";
-          return '<option value="' + esc(p.id) + '">' + esc(p.name || p.address || p.id) + mark + "</option>";
+          var mark = p.visitedToday ? " " + window.LF.t("— hecho hoy") : "";
+          return '<option value="' + esc(p.id) + '">' + esc(p.name || p.address || p.id) + esc(mark) + "</option>";
         }).join("");
       }
     } catch (e) { sel.innerHTML = '<option value="">' + esc(e.message) + "</option>"; }
@@ -1208,7 +1208,7 @@
     navigator.geolocation.getCurrentPosition(function (pos) {
       checkin.lat = String(pos.coords.latitude);
       checkin.lng = String(pos.coords.longitude);
-      st.textContent = "Ubicación capturada (" + checkin.lat.slice(0, 8) + ", " + checkin.lng.slice(0, 8) + ").";
+      st.textContent = window.LF.tf("Ubicación capturada ({lat}, {lng}).", { lat: checkin.lat.slice(0, 8), lng: checkin.lng.slice(0, 8) });
     }, function () {
       st.textContent = "No se pudo obtener la ubicación. Permite el acceso e inténtalo de nuevo.";
     }, { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 });
@@ -1230,7 +1230,7 @@
     }
     queueSet(left);
     var sent = q.length - left.length;
-    if (sent > 0) { toast(sent + " check-in(s) pendientes enviados"); if ($("#view-checkin.active")) loadCheckin(); }
+    if (sent > 0) { toast(window.LF.tf("{n} check-in(s) pendientes enviados", { n: sent })); if ($("#view-checkin.active")) loadCheckin(); }
   }
 
   async function submitCheckin() {
@@ -1337,7 +1337,10 @@
     var detail = "";
     if (status === "trialing" && b.trialEndsAt) {
       var days = Math.max(0, Math.ceil((Date.parse(b.trialEndsAt) - Date.now()) / 864e5));
-      detail = "Prueba gratuita — " + days + " día(s) restantes.";
+      detail = window.LF.tf("Prueba gratuita — {n} día(s) restantes.", { n: days });
+    } else if (status === "past_due" && b.canWrite && b.graceEndsAt) {
+      var gdays = Math.max(0, Math.ceil((Date.parse(b.graceEndsAt) - Date.now()) / 864e5));
+      detail = window.LF.tf("Pago pendiente — actualiza tu tarjeta en {n} día(s) o la cuenta pasará a solo-lectura.", { n: gdays });
     } else if (!b.canWrite) {
       detail = "Suscripción inactiva: la cuenta está en solo-lectura. Reactívala para volver a registrar datos.";
     } else {
@@ -1631,7 +1634,7 @@
     $("#imp-file").onchange = async function (e) {
       var file = e.target.files[0];
       if (!file) return;
-      try { var b64 = await fileToB64(file); parsed = await api("/api/import/parse", { method: "POST", body: JSON.stringify({ data: b64 }) }); renderMapping(); toast("Analizadas " + parsed.count + " filas"); }
+      try { var b64 = await fileToB64(file); parsed = await api("/api/import/parse", { method: "POST", body: JSON.stringify({ data: b64 }) }); renderMapping(); toast(window.LF.tf("Analizadas {n} filas", { n: parsed.count })); }
       catch (err) { toast(err.message, true); }
     };
     $("#imp-run").onclick = async function () {
@@ -1643,12 +1646,12 @@
       var rows = parsed.rows.map(function (r) {
         return order.map(function (k) { var ci = sel[k]; return (ci >= 0 && ci < r.length) ? r[ci] : ""; });
       });
-      try { var res = await api("/api/import/" + target, { method: "POST", body: JSON.stringify({ rows: rows }) }); toast("Importadas " + res.written + " filas"); parsed = null; $("#imp-file").value = ""; renderMapping(); }
+      try { var res = await api("/api/import/" + target, { method: "POST", body: JSON.stringify({ rows: rows }) }); toast(window.LF.tf("Importadas {n} filas", { n: res.written })); parsed = null; $("#imp-file").value = ""; renderMapping(); }
       catch (err) { toast(err.message, true); }
     };
     $("#setup-btn").onclick = async function () {
       if (!confirm(window.LF.t("¿Crear las pestañas workers / points / visits en tu hoja conectada?"))) return;
-      try { var res = await api("/api/setup", { method: "POST" }); toast(res.created && res.created.length ? "Creadas: " + res.created.join(", ") : "La hoja ya está lista"); }
+      try { var res = await api("/api/setup", { method: "POST" }); toast(res.created && res.created.length ? window.LF.tf("Creadas: {list}", { list: res.created.join(", ") }) : "La hoja ya está lista"); }
       catch (e) { toast(e.message, true); }
     };
 
@@ -1671,7 +1674,12 @@
     if (state.role === "worker") {
       applyWorkerMode();
       var hello = $("#ci-hello");
-      if (hello && state.role) hello.textContent = "Hola" + ($("#user").textContent ? ", " + $("#user").textContent : "") + ". Elige tu parada, comparte tu ubicación y añade una foto.";
+      if (hello && state.role) {
+        var uname = $("#user").textContent;
+        hello.textContent = uname
+          ? window.LF.tf("Hola, {name}. Elige tu parada, comparte tu ubicación y añade una foto.", { name: uname })
+          : window.LF.t("Hola. Elige tu parada, comparte tu ubicación y añade una foto.");
+      }
       showView("checkin");
       return;
     }

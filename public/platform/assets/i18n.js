@@ -276,7 +276,36 @@
     "Lun": ["Mon", "Пн"], "Mar": ["Tue", "Вт"], "Mié": ["Wed", "Ср"], "Jue": ["Thu", "Чт"],
     "Vie": ["Fri", "Пт"], "Sáb": ["Sat", "Сб"], "Dom": ["Sun", "Нд"],
     "Lunes": ["Monday", "Понеділок"], "Martes": ["Tuesday", "Вівторок"], "Miércoles": ["Wednesday", "Середа"],
-    "Jueves": ["Thursday", "Четвер"], "Viernes": ["Friday", "П'ятниця"], "Sábado": ["Saturday", "Субота"], "Domingo": ["Sunday", "Неділя"]
+    "Jueves": ["Thursday", "Четвер"], "Viernes": ["Friday", "П'ятниця"], "Sábado": ["Saturday", "Субота"], "Domingo": ["Sunday", "Неділя"],
+    // Interpolated templates — used via LF.tf(template, params). {tokens} are left intact
+    // by the dictionary lookup and filled in afterwards, so grammar stays correct per language.
+    "{n} seleccionado": ["{n} selected", "{n} вибрано"],
+    "{n} seleccionados": ["{n} selected", "{n} вибрано"],
+    "{n} sin asignar": ["{n} unassigned", "{n} не призначено"],
+    "{n} puntos asignados": ["{n} points assigned", "{n} точок призначено"],
+    "{n} puntos sin asignar": ["{n} points unassigned", "{n} точок не призначено"],
+    "Descargando {n} visitas": ["Downloading {n} visits", "Завантаження {n} візитів"],
+    "Analizadas {n} filas": ["Analyzed {n} rows", "Проаналізовано {n} рядків"],
+    "Importadas {n} filas": ["Imported {n} rows", "Імпортовано {n} рядків"],
+    "Creadas: {list}": ["Created: {list}", "Створено: {list}"],
+    "Bot @{u} en línea": ["Bot @{u} online", "Бот @{u} онлайн"],
+    "Ubicación capturada ({lat}, {lng}).": ["Location captured ({lat}, {lng}).", "Локацію отримано ({lat}, {lng})."],
+    "{n} check-in(s) pendientes enviados": ["{n} pending check-in(s) sent", "Надіслано {n} відкладених чек-інів"],
+    "Última visita: {t}": ["Last visit: {t}", "Останній візит: {t}"],
+    "Hola, {name}. Elige tu parada, comparte tu ubicación y añade una foto.": [
+      "Hi, {name}. Pick your stop, share your location and add a photo.",
+      "Привіт, {name}. Оберіть точку, поділіться локацією й додайте фото."],
+    "Hola. Elige tu parada, comparte tu ubicación y añade una foto.": [
+      "Hi. Pick your stop, share your location and add a photo.",
+      "Привіт. Оберіть точку, поділіться локацією й додайте фото."],
+    "Prueba gratuita — {n} día(s) restantes.": ["Free trial — {n} day(s) left.", "Безкоштовний період — залишилось {n} дн."],
+    "Pago pendiente — actualiza tu tarjeta en {n} día(s) o la cuenta pasará a solo-lectura.": [
+      "Payment due — update your card within {n} day(s) or the account goes read-only.",
+      "Очікується оплата — оновіть картку протягом {n} дн., інакше акаунт стане лише для читання."],
+    "sin Telegram": ["no Telegram", "без Telegram"],
+    "nunca": ["never", "ніколи"],
+    "— hecho hoy": [" — done today", " — зроблено сьогодні"],
+    "No hay paradas asignadas": ["No assigned stops", "Немає призначених точок"]
   };
 
   // ── Rich-text keys (element innerHTML via data-i18n) ──────────────────────────
@@ -308,6 +337,18 @@
     if (!row) return es;
     var val = row[LANGS[lang] - 1]; // en=index0, uk=index1 within the pair
     return val == null ? es : String(es).replace(key, val);
+  }
+
+  // Translate-and-format: look up an ES template (which contains {tokens}), then fill the
+  // tokens. Lets interpolated strings ("Analizadas {n} filas") translate with correct
+  // grammar instead of concatenating already-Spanish fragments. Falls back to the ES
+  // template if the key isn't in the dictionary.
+  function tf(esTemplate, params) {
+    params = params || {};
+    var translated = t(esTemplate);
+    return String(translated).replace(/\{(\w+)\}/g, function (_, k) {
+      return params[k] != null ? String(params[k]) : "{" + k + "}";
+    });
   }
 
   // Cache the original ES text on each node so we can re-translate on language switch.
@@ -391,6 +432,7 @@
 
   window.LF = window.LF || {};
   window.LF.t = t;
+  window.LF.tf = tf;
   window.LF.setLang = setLang;
   window.LF.lang = function () { return lang; };
 

@@ -23,14 +23,55 @@ function recent(afterId) {
   return afterId ? BUFFER.filter(e => e.id > afterId) : BUFFER.slice();
 }
 
+// Best-effort persistence to a platform-level `starx_logs` table (supabase only), so the
+// operator page shows real HISTORY that survives restarts — not just this process's tail.
+// Fire-and-forget; a logging failure must never affect the request that produced it, and
+// info-level noise is skipped to keep the table (and cost) small.
+function persist(entry) {
+  if ((process.env.DATASOURCE || "memory") !== "supabase") return;
+  if (entry.level === "info") return;
+  try {
+    require("./supabaseClient").getSupabase().from("starx_logs").insert({
+      ts: entry.ts, level: entry.level, message: String(entry.message || "").slice(0, 1000),
+      meta: entry.meta ? JSON.stringify(entry.meta).slice(0, 4000) : null,
+    }).then(() => {}, () => {});
+  } catch (e) { /* datasource unavailable — buffer still has it */ }
+}
+
 function line(level, message, meta) {
   const entry = { ts: new Date().toISOString(), level, message };
   if (meta && Object.keys(meta).length) entry.meta = meta;
   const s = JSON.stringify(entry);
   if (level === "error") console.error(s); else if (level === "warn") console.warn(s); else console.log(s);
   record(entry);
+  persist(entry);
   return entry;
 }
+
+// History for the operator page: persisted rows (newest first) when a platform DB exists,
+// otherwise this process's in-memory buffer. `opts`: { limit, level }.
+async function history(opts) {
+  opts = opts || {};
+  const limit = Math.min(parseInt(opts.limit, 10) || 200, 1000);
+  const level = opts.level && ["info", "warn", "error"].includes(opts.level) ? opts.level : "";
+  if ((process.env.DATASOURCE || "memory") === "supabase") {
+    try {
+      let q = require("./supabaseClient").getSupabase().from("starx_logs")
+        .select("*").order("ts", { ascending: false }).limit(limit);
+      if (level) q = q.eq("level", level);
+      const { data, error } = await q;
+      if (error) throw error;
+      return (data || []).map(r => ({
+        id: r.pk, ts: r.ts, level: r.level, message: r.message,
+        meta: r.meta ? safeParse(r.meta) : undefined,
+      }));
+    } catch (e) { /* fall through to buffer */ }
+  }
+  let rows = BUFFER.slice().reverse();
+  if (level) rows = rows.filter(e => e.level === level);
+  return rows.slice(0, limit);
+}
+function safeParse(s) { try { return JSON.parse(s); } catch (e) { return s; } }
 
 function alert(entry) {
   const url = process.env.ERROR_WEBHOOK_URL;
@@ -49,4 +90,4 @@ function error(message, err, meta) {
   return entry;
 }
 
-module.exports = { info, warn, error, recent };
+module.exports = { info, warn, error, recent, history };
