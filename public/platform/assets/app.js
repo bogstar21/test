@@ -1404,10 +1404,6 @@
     var pht = $("#photo-toggle");
     if (pht) pht.innerHTML = '<svg class="ic"><use href="#i-power"/></svg> ' + (photoOn ? "Hacer opcional" : "Hacer obligatoria");
 
-    // Bot language (A.1) — which language the Telegram bot speaks to this company's workers.
-    var bls = $("#bot-lang-select");
-    if (bls) bls.value = (s && s.botLang) || "es";
-
     var connOn = !!(s && s.connectorEnabled);
     var key = (s && s.connectorKey) || "";
     var cs = $("#conn-status");
@@ -1550,15 +1546,6 @@
     } catch (e) { toast(e.message, true); }
     finally { btn.disabled = false; }
   }
-  async function changeBotLang() {
-    var sel = $("#bot-lang-select"); if (!sel) return;
-    try {
-      var next = await api("/api/settings", { method: "POST", body: JSON.stringify({ botLang: sel.value }) });
-      renderSettings(next);
-      toast("Idioma del bot actualizado");
-    } catch (e) { toast(e.message, true); }
-  }
-
   // ── Account (password change) ────────────────────────────────────────────────
   async function changePassword() {
     var cur = $("#acct-cur").value, n1 = $("#acct-new").value, n2 = $("#acct-new2").value;
@@ -1792,7 +1779,6 @@
     // Settings (PWA toggle + connector key)
     var pwaBtn = $("#pwa-toggle"); if (pwaBtn) pwaBtn.onclick = togglePwa;
     var photoBtn = $("#photo-toggle"); if (photoBtn) photoBtn.onclick = togglePhoto;
-    var botLangSel = $("#bot-lang-select"); if (botLangSel) botLangSel.onchange = changeBotLang;
     var genBtn = $("#conn-key-gen"); if (genBtn) genBtn.onclick = generateConnectorKey;
     var cpyBtn = $("#conn-key-copy"); if (cpyBtn) cpyBtn.onclick = copyConnectorKey;
     var pwSaveBtn = $("#acct-pw-save"); if (pwSaveBtn) pwSaveBtn.onclick = changePassword;

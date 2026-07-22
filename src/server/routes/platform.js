@@ -55,13 +55,11 @@ function mountPlatformRoutes(app) {
       const pwaEnabled = String(await source.getSetting("pwa_enabled", "0")) === "1";
       const photoRequired = String(await source.getSetting("photo_required", "0")) === "1";
       const onboardingSeen = String(await source.getSetting("onboarding_seen", "0")) === "1";
-      const botLang = String(await source.getSetting("bot_lang", "es")) || "es";
       const key = await ensureConnectorKey(source, isAdmin);
       res.json({
         pwaEnabled,
         photoRequired,
         onboardingSeen,
-        botLang,
         connectorEnabled: !!key || !!(process.env.INTEGRATION_API_KEY || ""),
         connectorKey:     isAdmin ? key : "",
       });
@@ -97,16 +95,11 @@ function mountPlatformRoutes(app) {
       if (typeof (req.body && req.body.onboardingSeen) !== "undefined") {
         await source.setSetting("onboarding_seen", req.body.onboardingSeen ? "1" : "0");
       }
-      if (typeof (req.body && req.body.botLang) !== "undefined") {
-        const l = String(req.body.botLang || "es").toLowerCase();
-        await source.setSetting("bot_lang", ["es", "en", "uk"].includes(l) ? l : "es");
-      }
       const pwaEnabled = String(await source.getSetting("pwa_enabled", "0")) === "1";
       const photoRequired = String(await source.getSetting("photo_required", "0")) === "1";
       const onboardingSeen = String(await source.getSetting("onboarding_seen", "0")) === "1";
-      const botLang = String(await source.getSetting("bot_lang", "es")) || "es";
       const key = String((await source.getSetting(CONNECTOR_KEY_SETTING, "")) || "");
-      res.json({ ok: true, pwaEnabled, photoRequired, onboardingSeen, botLang, connectorEnabled: !!key || !!(process.env.INTEGRATION_API_KEY || "") });
+      res.json({ ok: true, pwaEnabled, photoRequired, onboardingSeen, connectorEnabled: !!key || !!(process.env.INTEGRATION_API_KEY || "") });
     } catch (e) {
       console.error("/api/settings error:", e && e.message);
       res.status(500).json({ error: (e && e.message) || "server_error" });

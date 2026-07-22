@@ -540,17 +540,7 @@
       "Видалити {n} вибраних працівників? Цю дію не можна скасувати."],
     "{n} trabajadores borrados": ["{n} workers deleted", "{n} працівників видалено"],
     "Borrar seleccionados": ["Delete selected", "Видалити вибрані"],
-    "Selecciona al menos un trabajador.": ["Select at least one worker.", "Виберіть принаймні одного працівника."],
-
-    // ── Bot language setting (Ajustes) ───────────────────────────────────────────
-    "Idioma del bot": ["Bot language", "Мова бота"],
-    "El idioma en el que el bot de Telegram habla con tus trabajadores.": [
-      "The language the Telegram bot speaks to your workers in.",
-      "Мова, якою Telegram-бот спілкується з вашими працівниками."],
-    "Español": ["Spanish", "Іспанська"],
-    "Inglés": ["English", "Англійська"],
-    "Ucraniano": ["Ukrainian", "Українська"],
-    "Idioma del bot actualizado": ["Bot language updated", "Мову бота оновлено"]
+    "Selecciona al menos un trabajador.": ["Select at least one worker.", "Виберіть принаймні одного працівника."]
   };
 
   // ── Rich-text keys (element innerHTML via data-i18n) ──────────────────────────

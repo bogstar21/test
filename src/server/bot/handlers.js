@@ -9,10 +9,9 @@
 // Because it talks only to the datasource seam (forTenant), a check-in from the bot
 // and the stats on the web dashboard always read/write the same store.
 //
-// Multi-language: every outgoing string goes through L(lang, key, params) (see ./i18n.js).
-// The tenant sets its bot language from the platform (Ajustes → "Idioma del bot", stored
-// as the `bot_lang` setting, default "es"); it's resolved once a user's tenant is known
-// and cached on their per-user state so we don't re-fetch it on every turn.
+// The bot always speaks English — every outgoing string goes through L("en", key, params)
+// (see ./i18n.js), which also holds the Spanish/Ukrainian strings unused for now but kept
+// in case per-tenant language ever comes back.
 const config = require("../config");
 const { forTenant } = require("../datasource");
 const { localDateStr, visitBelongsToWorker, geofenceOk } = require("../util");
@@ -35,29 +34,16 @@ function attachHandlers(bot) {
     return t ? forTenant(t) : null;
   }
 
-  // This user's bot language, resolved LIVE from the tenant's `bot_lang` setting on every
-  // call — never cached. A manager can change it from Ajustes at any time and it must take
-  // effect on the worker's very next message, without restarting the bot. Unregistered
-  // users (no tenant yet) get the default (Spanish), UNLESS a tenant is passed explicitly
-  // (e.g. resolved from a /start deep-link code before the worker's phone is confirmed).
-  async function langOf(userId, tenantHint) {
-    const st = getState(userId);
-    let lang = L.DEFAULT_LANG || "es";
-    const t = tenantHint || (st.tenantId ? config.tenants.byId(st.tenantId) : null);
-    if (t) {
-      try { lang = String(await forTenant(t).getSetting("bot_lang", "es")) || "es"; }
-      catch (e) { /* fall back to default */ }
-    }
-    return lang;
-  }
+  // The bot is English-only — no per-tenant/per-user resolution needed. Kept as a function
+  // (not a bare constant) so every call site reads the same as before this simplification.
+  async function langOf() { return "en"; }
   async function setTenantAndLang(userId, tenant) {
     setState(userId, { tenantId: tenant.id });
-    return langOf(userId, tenant);
+    return "en";
   }
 
   // Find which company a Telegram id belongs to (already-registered worker). Searches every
-  // tenant's roster; caches the tenant (and its bot language) on the user's state so later
-  // steps skip the scan.
+  // tenant's roster; caches the tenant on the user's state so later steps skip the scan.
   async function resolveByTelegram(userId) {
     for (const t of config.allTenants()) {
       try {
@@ -462,12 +448,9 @@ function attachHandlers(bot) {
     }
   });
 
-  // Command menu descriptions are set once at bot startup in a single language (Telegram
-  // doesn't support per-user localized command lists here); Spanish/English/Ukrainian
-  // workers all still get fully localized conversation messages once they interact.
   bot.setMyCommands([
-    { command: "start", description: L("es", "cmd_start") },
-    { command: "route", description: L("es", "cmd_route") },
+    { command: "start", description: L("en", "cmd_start") },
+    { command: "route", description: L("en", "cmd_route") },
   ]).catch(() => {});
 
   bot.on("polling_error", (e) => console.error("polling_error:", e.message));
