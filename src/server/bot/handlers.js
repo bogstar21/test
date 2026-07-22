@@ -35,27 +35,23 @@ function attachHandlers(bot) {
     return t ? forTenant(t) : null;
   }
 
-  // This user's bot language: cached on their state once resolved from the tenant's
-  // `bot_lang` setting. Unregistered users (no tenant yet) get the default (Spanish),
-  // UNLESS a tenant is passed explicitly (e.g. resolved from a /start deep-link code
-  // before the worker's phone is even confirmed).
+  // This user's bot language, resolved LIVE from the tenant's `bot_lang` setting on every
+  // call — never cached. A manager can change it from Ajustes at any time and it must take
+  // effect on the worker's very next message, without restarting the bot. Unregistered
+  // users (no tenant yet) get the default (Spanish), UNLESS a tenant is passed explicitly
+  // (e.g. resolved from a /start deep-link code before the worker's phone is confirmed).
   async function langOf(userId, tenantHint) {
     const st = getState(userId);
-    if (st.lang) return st.lang;
     let lang = L.DEFAULT_LANG || "es";
     const t = tenantHint || (st.tenantId ? config.tenants.byId(st.tenantId) : null);
     if (t) {
       try { lang = String(await forTenant(t).getSetting("bot_lang", "es")) || "es"; }
       catch (e) { /* fall back to default */ }
     }
-    setState(userId, { lang });
     return lang;
   }
-  // Force-refresh the cached lang once we've just learned which tenant this user
-  // belongs to (registration / first resolution), so this turn's remaining messages
-  // are already in the right language instead of lagging one round-trip behind.
   async function setTenantAndLang(userId, tenant) {
-    setState(userId, { tenantId: tenant.id, lang: undefined });
+    setState(userId, { tenantId: tenant.id });
     return langOf(userId, tenant);
   }
 
