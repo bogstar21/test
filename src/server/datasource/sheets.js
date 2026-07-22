@@ -130,11 +130,30 @@ function makeSheetsSource(sheetId) {
       workerId: str(r[4]).trim(),
     })).filter(w => w.telegramId || w.name || w.phone);
   }
+  // Bidirectional phone auto-sync: when a point is loaded before its worker exists, the
+  // unresolved phone reference is stored directly in the point's workerId column (see
+  // resolveWorker's fallback). Once that worker shows up, re-resolve any point still
+  // holding that phone.
+  async function relinkPointsForNewWorker(phone, workerId) {
+    if (!phone) return 0;
+    const points = await listPoints();
+    let n = 0;
+    for (const p of points) {
+      if (p.workerId && p.workerId !== workerId && phonesMatch(p.workerId, phone)) {
+        await updatePoint(p.row, { id: p.id, name: p.name, address: p.address, lat: p.lat, lng: p.lng, active: p.active, workerId });
+        n++;
+      }
+    }
+    return n;
+  }
+
   async function addWorker(f) {
     const row = await nextEmptyRow(TABS.workers.name);
     const workerId = str(f.workerId).trim() || newWorkerId();
-    await writeRange(`${TABS.workers.name}!A${row}`, [[str(f.telegramId).trim(), str(f.name).trim(), str(f.phone).trim(), f.active === false ? "0" : "1", workerId]]);
-    return { workerId, telegramId: str(f.telegramId).trim(), name: str(f.name).trim(), phone: str(f.phone).trim(), active: f.active !== false, row };
+    const phone = str(f.phone).trim();
+    await writeRange(`${TABS.workers.name}!A${row}`, [[str(f.telegramId).trim(), str(f.name).trim(), phone, f.active === false ? "0" : "1", workerId]]);
+    if (phone) await relinkPointsForNewWorker(phone, workerId);
+    return { workerId, telegramId: str(f.telegramId).trim(), name: str(f.name).trim(), phone, active: f.active !== false, row };
   }
   async function updateWorker(row, f) {
     const workerId = str(f.workerId).trim() || newWorkerId();
@@ -143,7 +162,12 @@ function makeSheetsSource(sheetId) {
   async function deleteWorker(row) { return deleteRows(TABS.workers.name, [row]); }
   async function appendWorkers(rows) {
     const prepared = rows.map(r => [str(r[0]).trim(), str(r[1]).trim(), str(r[2]).trim(), "1", newWorkerId()]).filter(r => r[0] || r[1] || r[2]);
-    return appendBlock(TABS.workers.name, prepared);
+    const written = await appendBlock(TABS.workers.name, prepared);
+    for (const r of prepared) {
+      const phone = r[2], workerId = r[4];
+      if (phone) await relinkPointsForNewWorker(phone, workerId);
+    }
+    return written;
   }
   async function findWorkerByPhone(phone) {
     const workers = await listWorkers();

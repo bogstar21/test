@@ -168,6 +168,7 @@
           <span class="bulk-count" id="points-bulk-count">0 seleccionados</span>
           <select id="points-bulk-worker"><option value="">— Sin asignar —</option></select>
           <button class="btn sm" id="points-bulk-assign"><svg class="ic"><use href="#i-users"/></svg> Asignar seleccionados</button>
+          <button class="btn danger sm" id="points-bulk-delete"><svg class="ic"><use href="#i-x"/></svg> Borrar seleccionados</button>
           <button class="btn ghost sm" id="points-bulk-clear">Limpiar</button>
         </div>
         <p class="muted admin-only" data-i18n="points.help" style="margin:2px 2px 10px">Para asignar un trabajador: marca una o varias casillas y usa <b>Asignar seleccionados</b>, o pulsa <b>Editar</b> en un punto y elige el trabajador.</p>
@@ -188,6 +189,11 @@
         </div>
         <div class="filterbar">
           <label class="search"><svg class="ic"><use href="#i-search"/></svg><input id="workers-search" type="search" placeholder="Buscar por nombre, teléfono o ID…"></label>
+        </div>
+        <div class="bulkbar hidden" id="workers-bulkbar">
+          <span class="bulk-count" id="workers-bulk-count">0 seleccionados</span>
+          <button class="btn danger sm" id="workers-bulk-delete"><svg class="ic"><use href="#i-x"/></svg> Borrar seleccionados</button>
+          <button class="btn ghost sm" id="workers-bulk-clear">Limpiar</button>
         </div>
         <div id="workers-pending"></div>
         <div id="workers-wrap"><div class="empty">Cargando…</div></div>
@@ -489,6 +495,15 @@
           <div class="toolbar">
             <button class="btn admin-only" id="photo-toggle"><svg class="ic"><use href="#i-power"/></svg> Hacer obligatoria</button>
           </div>
+          <div class="field" style="margin-top:16px;max-width:280px">
+            <label>Idioma del bot</label>
+            <select id="bot-lang-select">
+              <option value="es">Español</option>
+              <option value="en">Inglés</option>
+              <option value="uk">Ucraniano</option>
+            </select>
+            <p class="muted" style="margin-top:6px;font-size:12px">El idioma en el que el bot de Telegram habla con tus trabajadores.</p>
+          </div>
         </div>
 
         <!-- Suscripción -->
@@ -574,17 +589,14 @@
         </div>
 
         <!-- Their own assigned points, with today's status and last visit — so a worker
-             can see their whole route, not just the dropdown they're about to submit. -->
+             can see their whole route, not just the dropdown they're about to submit.
+             Each stop is its own hard-bordered card (not one shared glass panel). -->
         <div class="section-title"><svg class="ic"><use href="#i-pin"/></svg> Tus paradas asignadas</div>
-        <div class="card chart-card">
-          <div id="ci-points-wrap"><div class="empty">Cargando…</div></div>
-        </div>
+        <div id="ci-points-wrap" class="stop-grid"><div class="empty">Cargando…</div></div>
 
         <!-- Their own recent check-ins — a small personal log, not the company-wide table. -->
         <div class="section-title"><svg class="ic"><use href="#i-clock"/></svg> Tus últimos check-ins</div>
-        <div class="card chart-card">
-          <div id="ci-recent-wrap"><div class="empty">Cargando…</div></div>
-        </div>
+        <div id="ci-recent-wrap" class="stop-grid"><div class="empty">Cargando…</div></div>
       </section>
 
     </main>

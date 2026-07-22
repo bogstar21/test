@@ -106,8 +106,9 @@ function mountVisitRoutes(app) {
       const fields = ["pdfCompanyName", "pdfTaxId", "pdfAddress", "pdfLogoUrl", "pdfDocTitle", "pdfFootnote"];
       const keys = { pdfCompanyName: "pdf_company_name", pdfTaxId: "pdf_tax_id", pdfAddress: "pdf_address", pdfLogoUrl: "pdf_logo_url", pdfDocTitle: "pdf_doc_title", pdfFootnote: "pdf_footnote" };
       for (const f of fields) pdfSettings[f] = String(await source.getSetting(keys[f], "") || "");
+      const lang = String(await source.getSetting("bot_lang", "es")) || "es";
       const baseUrl = (config.PLATFORM_URL || `${req.protocol}://${req.get("host")}`).replace(/\/+$/, "");
-      await renderVisitPdf(res, { visit, point, tenant, pdfSettings, source, baseUrl });
+      await renderVisitPdf(res, { visit, point, tenant, pdfSettings, source, baseUrl, lang });
     } catch (e) { fail(res, e); }
   });
 

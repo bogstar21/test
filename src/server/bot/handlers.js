@@ -8,9 +8,15 @@
 //
 // Because it talks only to the datasource seam (forTenant), a check-in from the bot
 // and the stats on the web dashboard always read/write the same store.
+//
+// Multi-language: every outgoing string goes through L(lang, key, params) (see ./i18n.js).
+// The tenant sets its bot language from the platform (Ajustes → "Idioma del bot", stored
+// as the `bot_lang` setting, default "es"); it's resolved once a user's tenant is known
+// and cached on their per-user state so we don't re-fetch it on every turn.
 const config = require("../config");
 const { forTenant } = require("../datasource");
 const { localDateStr, visitBelongsToWorker, geofenceOk } = require("../util");
+const { L } = require("./i18n");
 
 // Attach every handler to a ready TelegramBot instance. Called by the bot manager
 // right after it creates the bot (see src/server/bot/manager.js).
@@ -29,14 +35,39 @@ function attachHandlers(bot) {
     return t ? forTenant(t) : null;
   }
 
+  // This user's bot language: cached on their state once resolved from the tenant's
+  // `bot_lang` setting. Unregistered users (no tenant yet) get the default (Spanish),
+  // UNLESS a tenant is passed explicitly (e.g. resolved from a /start deep-link code
+  // before the worker's phone is even confirmed).
+  async function langOf(userId, tenantHint) {
+    const st = getState(userId);
+    if (st.lang) return st.lang;
+    let lang = L.DEFAULT_LANG || "es";
+    const t = tenantHint || (st.tenantId ? config.tenants.byId(st.tenantId) : null);
+    if (t) {
+      try { lang = String(await forTenant(t).getSetting("bot_lang", "es")) || "es"; }
+      catch (e) { /* fall back to default */ }
+    }
+    setState(userId, { lang });
+    return lang;
+  }
+  // Force-refresh the cached lang once we've just learned which tenant this user
+  // belongs to (registration / first resolution), so this turn's remaining messages
+  // are already in the right language instead of lagging one round-trip behind.
+  async function setTenantAndLang(userId, tenant) {
+    setState(userId, { tenantId: tenant.id, lang: undefined });
+    return langOf(userId, tenant);
+  }
+
   // Find which company a Telegram id belongs to (already-registered worker). Searches every
-  // tenant's roster; caches the tenant on the user's state so later steps skip the scan.
+  // tenant's roster; caches the tenant (and its bot language) on the user's state so later
+  // steps skip the scan.
   async function resolveByTelegram(userId) {
     for (const t of config.allTenants()) {
       try {
         const w = (await forTenant(t).listWorkers())
           .find(x => String(x.telegramId) === String(userId) && x.active);
-        if (w) { setState(userId, { tenantId: t.id }); return { tenant: t, worker: w }; }
+        if (w) { await setTenantAndLang(userId, t); return { tenant: t, worker: w }; }
       } catch (e) { /* skip a tenant whose datasource is unavailable */ }
     }
     return null;
@@ -52,29 +83,29 @@ function attachHandlers(bot) {
     return null;
   }
 
-  // ── Keyboards ────────────────────────────────────────────────────────────
+  // ── Keyboards (built per-language: button labels are user-facing text) ───────────
   // Reply keyboards carry a Cancel option during the flow so a worker is never stuck.
-  const locationKb = { keyboard: [[{ text: "📍 Enviar ubicación", request_location: true }], [{ text: "❌ Cancelar" }]], resize_keyboard: true, one_time_keyboard: true };
-  const contactKb   = { keyboard: [[{ text: "📱 Compartir mi teléfono", request_contact: true }]], resize_keyboard: true, one_time_keyboard: true };
-  const doneKb      = { keyboard: [[{ text: "✅ Terminar" }, { text: "❌ Cancelar" }]], resize_keyboard: true };
-  const removeKb    = { remove_keyboard: true };
-  // Button labels reused in message handlers (keep in one place so they can't drift).
-  const BTN_DONE = "✅ Terminar", BTN_CANCEL = "❌ Cancelar";
+  const locationKb = lang => ({ keyboard: [[{ text: L(lang, "btn_send_location"), request_location: true }], [{ text: L(lang, "btn_cancel") }]], resize_keyboard: true, one_time_keyboard: true });
+  const contactKb   = lang => ({ keyboard: [[{ text: L(lang, "btn_share_phone"), request_contact: true }]], resize_keyboard: true, one_time_keyboard: true });
+  const doneKb      = lang => ({ keyboard: [[{ text: L(lang, "btn_done") }, { text: L(lang, "btn_cancel") }]], resize_keyboard: true });
+  const removeKb    = { remove_keyboard: true }; // no text on this one — language-independent
 
   // Optional post-photo commentary step: quick-pick presets (inline buttons) or the
   // worker just types (or sends a voice note for) their own comment. `skip` writes no note.
-  const NOTE_PRESETS = {
-    delivered: "📦 Entregado en recepción", absent: "🚪 Cliente no presente",
-    damage: "⚠️ Daños observados", skip: "",
-  };
-  const noteKb = {
+  function notePreset(lang, key) {
+    if (key === "delivered") return L(lang, "btn_note_delivered");
+    if (key === "absent")    return L(lang, "btn_note_absent");
+    if (key === "damage")    return L(lang, "btn_note_damage");
+    return ""; // skip
+  }
+  const noteKb = lang => ({
     inline_keyboard: [
-      [{ text: "📦 Entregado en recepción", callback_data: "note:delivered" }],
-      [{ text: "🚪 Cliente no presente", callback_data: "note:absent" }],
-      [{ text: "⚠️ Daños observados", callback_data: "note:damage" }],
-      [{ text: "⏭️ Omitir", callback_data: "note:skip" }],
+      [{ text: L(lang, "btn_note_delivered"), callback_data: "note:delivered" }],
+      [{ text: L(lang, "btn_note_absent"), callback_data: "note:absent" }],
+      [{ text: L(lang, "btn_note_damage"), callback_data: "note:damage" }],
+      [{ text: L(lang, "btn_note_skip"), callback_data: "note:skip" }],
     ],
-  };
+  });
 
   // Resolve the worker behind a Telegram id (across all companies) and remember the tenant.
   async function findWorker(telegramId) {
@@ -102,11 +133,10 @@ function attachHandlers(bot) {
   }
 
   // Prompt an unregistered user to share their phone so we can link them by phone.
-  function askForContact(chatId, company) {
-    const who = company ? ` de *${esc(company)}*` : "";
-    return bot.sendMessage(chatId,
-      `👋 Bienvenido a *StarX*${who}.\n\nPara registrarte, comparte tu número de teléfono con el botón de abajo y te enlazaré con tu perfil.`,
-      { parse_mode: "Markdown", reply_markup: contactKb });
+  async function askForContact(chatId, userId, company) {
+    const lang = await langOf(userId);
+    const text = company ? L(lang, "welcome_new_company", { company: esc(company) }) : L(lang, "welcome_new");
+    return bot.sendMessage(chatId, text, { parse_mode: "Markdown", reply_markup: contactKb(lang) });
   }
 
   function esc(s) { return String(s == null ? "" : s).replace(/([_*\[\]()`])/g, "\\$1"); }
@@ -120,19 +150,24 @@ function attachHandlers(bot) {
     try {
       const worker = await findWorker(userId);
       if (worker) {
+        const lang = await langOf(userId);
         return bot.sendMessage(msg.chat.id,
-          `👋 ¡Hola *${esc(worker.name || "compañero")}*!\n\nPulsa /route para ver tus paradas y empezar a hacer check-in.`,
+          L(lang, "hello_back", { name: esc(worker.name || "") || (lang === "en" ? "friend" : lang === "uk" ? "друже" : "compañero") }),
           { parse_mode: "Markdown" });
       }
       // Not registered yet. If they arrived via a company deep-link, remember that company
-      // so their shared contact is linked to the right roster.
+      // (and its bot language) so their shared contact is linked to the right roster.
       if (code) {
         const t = config.tenants.byCode(code);
-        if (t) { setState(userId, { regTenantId: t.id }); return askForContact(msg.chat.id, t.name); }
+        if (t) {
+          setState(userId, { regTenantId: t.id });
+          return askForContact(msg.chat.id, userId, t.name);
+        }
       }
-      return askForContact(msg.chat.id);
+      return askForContact(msg.chat.id, userId);
     } catch (e) {
-      bot.sendMessage(msg.chat.id, "⚠️ No pude conectar con la base de datos. Inténtalo de nuevo en un momento.");
+      const lang = await langOf(userId);
+      bot.sendMessage(msg.chat.id, L(lang, "db_error"));
       console.error("/start error:", e.message);
     }
   });
@@ -152,12 +187,13 @@ function attachHandlers(bot) {
   // with many points types a few letters instead of scrolling dozens of buttons.
   async function sendRoute(chatId, userId, query) {
     const worker = await findWorker(userId);
-    if (!worker) return askForContact(chatId);
+    if (!worker) return askForContact(chatId, userId);
     const src = srcOf(userId);
-    if (!src) return askForContact(chatId);
+    if (!src) return askForContact(chatId, userId);
+    const lang = await langOf(userId);
 
     let points = (await src.listPointsForWorker(worker.workerId)).filter(p => p.active);
-    if (!points.length) return bot.sendMessage(chatId, "Todavía no tienes paradas asignadas. Pídele a tu responsable que te las asigne.");
+    if (!points.length) return bot.sendMessage(chatId, L(lang, "no_points_assigned"));
 
     const { visitedToday: visited, usage } = await workerVisitStats(userId, worker);
     // Most-used stops first so the 5 shown by default are the ones this worker visits most
@@ -177,18 +213,17 @@ function attachHandlers(bot) {
       const done = visited.has(String(p.id));
       return [{ text: `${done ? "✅" : "📍"} ${p.name || p.address || p.id}`, callback_data: `ci:${i}` }];
     });
-    buttons.push([{ text: "🔍 Buscar parada", callback_data: "route:search" }, { text: "🔄 Actualizar", callback_data: "route:refresh" }]);
+    buttons.push([{ text: L(lang, "btn_search_stop"), callback_data: "route:search" }, { text: L(lang, "btn_refresh"), callback_data: "route:refresh" }]);
 
     let header;
     if (q) {
+      const more = matches.length > ROUTE_PAGE ? L(lang, "route_search_more", { page: ROUTE_PAGE }) : "";
       header = matches.length
-        ? `🔎 *${matches.length}* resultado(s) para "${esc(q)}"${matches.length > ROUTE_PAGE ? ` (mostrando ${ROUTE_PAGE}, afina la búsqueda)` : ""}:`
-        : `🔎 Nada coincide con "${esc(q)}".\nPulsa *🔍 Buscar parada* para probar otra vez.`;
+        ? L(lang, "route_search_results", { count: matches.length, q: esc(q), more })
+        : L(lang, "route_search_none", { q: esc(q) });
     } else {
-      const more = points.length > ROUTE_PAGE
-        ? `\nTienes *${points.length}* paradas — muestro tus *${ROUTE_PAGE} más usadas*. Pulsa *🔍 Buscar parada* para encontrar cualquier otra por nombre.`
-        : "";
-      header = `🗺 *Tus paradas* — ${doneCount}/${points.length} hechas hoy.${more}\nPulsa una para hacer check-in (✅ = ya hecha hoy):`;
+      const more = points.length > ROUTE_PAGE ? L(lang, "route_more_suffix", { total: points.length, page: ROUTE_PAGE }) : "";
+      header = L(lang, "route_header", { done: doneCount, total: points.length, more });
     }
     return bot.sendMessage(chatId, header, {
       parse_mode: "Markdown",
@@ -200,17 +235,22 @@ function attachHandlers(bot) {
   bot.onText(/^\/route/, async (msg) => {
     if (msg.chat.type !== "private") return;
     try { await sendRoute(msg.chat.id, msg.from.id); }
-    catch (e) { bot.sendMessage(msg.chat.id, "⚠️ No pude cargar tu ruta. Inténtalo de nuevo en un momento."); console.error("/route error:", e.message); }
+    catch (e) {
+      const lang = await langOf(msg.from.id);
+      bot.sendMessage(msg.chat.id, L(lang, "route_load_error"));
+      console.error("/route error:", e.message);
+    }
   });
 
   // Writes the Visit (whatever comment text, or "" to skip) and resets the worker's state.
   // Shared by the quick-pick inline buttons, a typed comment, and a voice-note comment.
   async function finalizeVisit(chatId, userId, note) {
     const st = getState(userId);
+    const lang = await langOf(userId);
     try {
       const worker = st.worker || await findWorker(userId);
       const src = srcOf(userId);
-      if (!src) { clearState(userId); return bot.sendMessage(chatId, "⚠️ Sesión caducada. Pulsa /route otra vez.", { reply_markup: removeKb }); }
+      if (!src) { clearState(userId); return bot.sendMessage(chatId, L(lang, "session_expired"), { reply_markup: removeKb }); }
       const visitId = await src.addVisit({
         timestamp: new Date().toISOString(),
         workerId: worker ? worker.workerId : "",
@@ -228,11 +268,11 @@ function attachHandlers(bot) {
       catch (e) { console.error("ensurePointLocation error:", e.message); }
       clearState(userId);
       bot.sendMessage(chatId,
-        `✅ *Check-in guardado* en *${esc(st.pointName)}*.\n📸 Fotos: ${(st.photos || []).length}\n🆔 ${esc(visitId)}\n\nPulsa /route para la siguiente parada.`,
+        L(lang, "checkin_saved", { point: esc(st.pointName), n: (st.photos || []).length, id: esc(visitId) }),
         { parse_mode: "Markdown", reply_markup: removeKb });
     } catch (e) {
       console.error("finalize error:", e.message);
-      bot.sendMessage(chatId, "⚠️ No pude guardar el check-in. Pulsa /route otra vez.", { reply_markup: removeKb });
+      bot.sendMessage(chatId, L(lang, "finalize_error"), { reply_markup: removeKb });
     }
   }
 
@@ -241,28 +281,29 @@ function attachHandlers(bot) {
   bot.on("callback_query", async (q) => {
     const [action, idx] = (q.data || "").split(":");
     const userId = q.from.id;
+    const lang = await langOf(userId);
 
     if (action === "route" && idx === "refresh") {
-      await bot.answerCallbackQuery(q.id, { text: "Ruta actualizada" }).catch(() => {});
+      await bot.answerCallbackQuery(q.id, { text: L(lang, "route_updated") }).catch(() => {});
       try { await sendRoute(q.message.chat.id, userId); } catch (e) { console.error("route refresh error:", e.message); }
       return;
     }
     if (action === "route" && idx === "search") {
       setState(userId, { step: "searching" });
       await bot.answerCallbackQuery(q.id).catch(() => {});
-      return bot.sendMessage(q.message.chat.id, "🔍 Escribe parte del *nombre o dirección* de la parada:", { parse_mode: "Markdown" });
+      return bot.sendMessage(q.message.chat.id, L(lang, "search_prompt"), { parse_mode: "Markdown" });
     }
     if (action === "note") {
       await bot.answerCallbackQuery(q.id).catch(() => {});
       if (getState(userId).step !== "waiting_comment") return;
-      return finalizeVisit(q.message.chat.id, userId, NOTE_PRESETS[idx] || "");
+      return finalizeVisit(q.message.chat.id, userId, notePreset(lang, idx));
     }
     if (action !== "ci") return bot.answerCallbackQuery(q.id).catch(() => {});
 
     const st = getState(userId);
     const point = (st.routeMap || [])[parseInt(idx, 10)];
     if (!point) {
-      await bot.answerCallbackQuery(q.id, { text: "Pulsa /route otra vez.", show_alert: true }).catch(() => {});
+      await bot.answerCallbackQuery(q.id, { text: L(lang, "tap_route_again"), show_alert: true }).catch(() => {});
       return;
     }
     setState(userId, {
@@ -274,16 +315,17 @@ function attachHandlers(bot) {
     });
     await bot.answerCallbackQuery(q.id).catch(() => {});
     bot.sendMessage(q.message.chat.id,
-      `📍 Check-in en *${esc(point.name || point.address || point.id)}*.\n\n*Paso 1 de 2* — envía tu ubicación:`,
-      { parse_mode: "Markdown", reply_markup: locationKb });
+      L(lang, "checkin_step1", { point: esc(point.name || point.address || point.id) }),
+      { parse_mode: "Markdown", reply_markup: locationKb(lang) });
   });
 
   // ── Location ─────────────────────────────────────────────────────────────────
-  bot.on("location", (msg) => {
+  bot.on("location", async (msg) => {
     if (msg.chat.type !== "private") return;
     const userId = msg.from.id;
     const st = getState(userId);
     if (st.step !== "waiting_location") return;
+    const lang = await langOf(userId);
     const { latitude, longitude } = msg.location;
 
     // Geofence: if the point already has coords and a radius is configured, the worker
@@ -293,8 +335,8 @@ function attachHandlers(bot) {
       latitude, longitude, config.GEOFENCE_METERS);
     if (!fence.ok) {
       return bot.sendMessage(msg.chat.id,
-        `⚠️ Estás a *${fence.distance} m* de *${esc(st.pointName)}* (máximo ${config.GEOFENCE_METERS} m).\nAcércate al punto y vuelve a enviar tu ubicación.`,
-        { parse_mode: "Markdown", reply_markup: locationKb });
+        L(lang, "geofence_too_far", { dist: fence.distance, point: esc(st.pointName), max: config.GEOFENCE_METERS }),
+        { parse_mode: "Markdown", reply_markup: locationKb(lang) });
     }
     setState(userId, {
       step: "waiting_photos",
@@ -302,22 +344,21 @@ function attachHandlers(bot) {
       mapsLink: `https://www.google.com/maps?q=${latitude},${longitude}`,
       photos: [],
     });
-    bot.sendMessage(msg.chat.id,
-      "✅ Ubicación recibida.\n\n📸 *Paso 2 de 2* — envía una o varias fotos y luego pulsa *✅ Terminar*.\n(Si no hace falta foto, puedes pulsar *✅ Terminar* directamente.)",
-      { parse_mode: "Markdown", reply_markup: doneKb });
+    bot.sendMessage(msg.chat.id, L(lang, "location_received"), { parse_mode: "Markdown", reply_markup: doneKb(lang) });
   });
 
   // ── Contact → register by phone ──────────────────────────────────────────────
   bot.on("contact", async (msg) => {
     if (msg.chat.type !== "private") return;
     const userId = msg.from.id;
+    const lang = await langOf(userId);
     // Only trust the user's OWN shared contact (Telegram sets user_id on it).
     if (msg.contact.user_id && String(msg.contact.user_id) !== String(userId)) {
-      return bot.sendMessage(msg.chat.id, "Por favor, comparte *tu propio* número de teléfono.", { parse_mode: "Markdown", reply_markup: contactKb });
+      return bot.sendMessage(msg.chat.id, L(lang, "share_own_phone_only"), { parse_mode: "Markdown", reply_markup: contactKb(lang) });
     }
     try {
       const already = await findWorker(userId);
-      if (already) return bot.sendMessage(msg.chat.id, `✅ Ya estás registrado como *${esc(already.name)}*. Pulsa /route.`, { parse_mode: "Markdown", reply_markup: removeKb });
+      if (already) return bot.sendMessage(msg.chat.id, L(lang, "already_registered", { name: esc(already.name) }), { parse_mode: "Markdown", reply_markup: removeKb });
 
       // Which company does this phone belong to? Prefer the deep-link company they arrived
       // through; otherwise search every roster by phone (the manager preloaded it somewhere).
@@ -333,9 +374,9 @@ function attachHandlers(bot) {
       if (hit) {
         // Known worker → link this Telegram account to their profile, in THEIR company.
         await forTenant(hit.tenant).linkWorkerTelegram(hit.worker.row, userId);
-        setState(userId, { tenantId: hit.tenant.id });
+        const hitLang = await setTenantAndLang(userId, hit.tenant);
         return bot.sendMessage(msg.chat.id,
-          `✅ ¡Registrado como *${esc(hit.worker.name || "trabajador")}* en *${esc(hit.tenant.name)}*!\n\nPulsa /route para ver tus paradas y empezar a hacer check-in.`,
+          L(hitLang, "registered_in_company", { name: esc(hit.worker.name || ""), company: esc(hit.tenant.name) }),
           { parse_mode: "Markdown", reply_markup: removeKb });
       }
 
@@ -345,25 +386,24 @@ function attachHandlers(bot) {
         || (msg.from.username ? "@" + msg.from.username : "");
       const regT = st.regTenantId ? config.tenants.byId(st.regTenantId) : null;
       if (regT) { try { await require("../pending").add(forTenant(regT), msg.contact.phone_number, attemptName); } catch (e) {} }
-      bot.sendMessage(msg.chat.id,
-        "⚠️ Tu número no está en el sistema.\n\nPide a tu responsable que te dé de alta con *este mismo teléfono*, o que te pase el *enlace de tu empresa*, y vuelve a pulsar /start.",
-        { parse_mode: "Markdown", reply_markup: removeKb });
+      bot.sendMessage(msg.chat.id, L(lang, "unknown_number"), { parse_mode: "Markdown", reply_markup: removeKb });
     } catch (e) {
       console.error("contact/register error:", e.message);
-      bot.sendMessage(msg.chat.id, "⚠️ No pude completar el registro. Inténtalo de nuevo en un momento.", { reply_markup: removeKb });
+      bot.sendMessage(msg.chat.id, L(lang, "register_error"), { reply_markup: removeKb });
     }
   });
 
   // ── Photos ───────────────────────────────────────────────────────────────────
-  bot.on("photo", (msg) => {
+  bot.on("photo", async (msg) => {
     if (msg.chat.type !== "private") return;
     const userId = msg.from.id;
     const st = getState(userId);
     if (st.step !== "waiting_photos") return;
+    const lang = await langOf(userId);
     const photos = st.photos || [];
     photos.push(msg.photo[msg.photo.length - 1].file_id);
     setState(userId, { photos });
-    bot.sendMessage(msg.chat.id, `📸 Foto ${photos.length} recibida. Envía más o pulsa *✅ Terminar*.`, { parse_mode: "Markdown", reply_markup: doneKb });
+    bot.sendMessage(msg.chat.id, L(lang, "photo_received", { n: photos.length }), { parse_mode: "Markdown", reply_markup: doneKb(lang) });
   });
 
   // ── Voice-note comment (only meaningful during the optional comment step) ────
@@ -385,16 +425,18 @@ function attachHandlers(bot) {
     if (text.startsWith("/")) return; // commands handled by onText
     const userId = msg.from.id;
     const st = getState(userId);
+    const lang = await langOf(userId);
+    const BTN_DONE = L(lang, "btn_done"), BTN_CANCEL = L(lang, "btn_cancel");
 
     if (text === BTN_CANCEL) {
       clearState(userId);
-      return bot.sendMessage(msg.chat.id, "Cancelado.", { reply_markup: removeKb });
+      return bot.sendMessage(msg.chat.id, L(lang, "cancelled"), { reply_markup: removeKb });
     }
 
     // Worker typed a search query after tapping "🔍 Buscar parada" → show matching stops.
     if (st.step === "searching") {
       try { await sendRoute(msg.chat.id, userId, text); }
-      catch (e) { console.error("route search error:", e.message); bot.sendMessage(msg.chat.id, "⚠️ No pude buscar. Pulsa /route."); }
+      catch (e) { console.error("route search error:", e.message); bot.sendMessage(msg.chat.id, L(lang, "search_error")); }
       return;
     }
 
@@ -406,29 +448,30 @@ function attachHandlers(bot) {
     }
 
     if (text === BTN_DONE) {
-      if (st.step !== "waiting_photos") return bot.sendMessage(msg.chat.id, "No hay nada que terminar. Pulsa /route para empezar.", { reply_markup: removeKb });
+      if (st.step !== "waiting_photos") return bot.sendMessage(msg.chat.id, L(lang, "nothing_to_finish"), { reply_markup: removeKb });
       try {
         const src = srcOf(userId);
-        if (!src) return bot.sendMessage(msg.chat.id, "⚠️ Sesión caducada. Pulsa /route otra vez.", { reply_markup: removeKb });
+        if (!src) return bot.sendMessage(msg.chat.id, L(lang, "session_expired"), { reply_markup: removeKb });
         // A.2 — Photo may be required per company.
         if (!(st.photos || []).length && String(await src.getSetting("photo_required", "0")) === "1") {
-          return bot.sendMessage(msg.chat.id, "📸 Esta empresa exige al menos una foto. Envía una foto y luego pulsa *✅ Terminar*.", { parse_mode: "Markdown", reply_markup: doneKb });
+          return bot.sendMessage(msg.chat.id, L(lang, "photo_required"), { parse_mode: "Markdown", reply_markup: doneKb(lang) });
         }
         const worker = st.worker || await findWorker(userId);
         setState(userId, { step: "waiting_comment", worker });
-        bot.sendMessage(msg.chat.id,
-          "📝 ¿Quieres añadir un comentario? Envía un texto o una nota de voz, o elige una opción rápida (o pulsa *✅ Terminar* para omitir):",
-          { parse_mode: "Markdown", reply_markup: noteKb });
+        bot.sendMessage(msg.chat.id, L(lang, "comment_prompt"), { parse_mode: "Markdown", reply_markup: noteKb(lang) });
       } catch (e) {
         console.error("comment-step error:", e.message);
-        bot.sendMessage(msg.chat.id, "⚠️ Algo falló. Pulsa *✅ Terminar* de nuevo.", { parse_mode: "Markdown", reply_markup: doneKb });
+        bot.sendMessage(msg.chat.id, L(lang, "comment_step_error"), { parse_mode: "Markdown", reply_markup: doneKb(lang) });
       }
     }
   });
 
+  // Command menu descriptions are set once at bot startup in a single language (Telegram
+  // doesn't support per-user localized command lists here); Spanish/English/Ukrainian
+  // workers all still get fully localized conversation messages once they interact.
   bot.setMyCommands([
-    { command: "start", description: "Iniciar / registrarse" },
-    { command: "route", description: "Ver mis paradas y hacer check-in" },
+    { command: "start", description: L("es", "cmd_start") },
+    { command: "route", description: L("es", "cmd_route") },
   ]).catch(() => {});
 
   bot.on("polling_error", (e) => console.error("polling_error:", e.message));

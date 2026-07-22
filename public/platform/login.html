@@ -161,7 +161,7 @@
           body: JSON.stringify({ email: email }),
         });
         var data = await res.json().catch(function () { return {}; });
-        fOk.textContent = (data && data.detail) || "Si ese correo existe, te hemos enviado un enlace.";
+        fOk.textContent = (data && data.detail) || "Si ese correo existe en nuestro sistema, te hemos enviado un enlace para restablecer la contraseña.";
         fOk.classList.remove("hide");
         fForm.querySelector("input").value = "";
       } catch (err) { fErr.textContent = "Error de red. Inténtalo de nuevo."; fErr.classList.remove("hide"); }
@@ -179,9 +179,9 @@
           body: JSON.stringify({ phone: phone, code: code }),
         });
         var data = await res.json().catch(function () { return {}; });
-        if (!res.ok) { eW.textContent = data.detail || "Could not sign in."; eW.style.display = "block"; return; }
+        if (!res.ok) { eW.textContent = data.detail || "No se pudo iniciar sesión."; eW.style.display = "block"; return; }
         location.href = "/platform";
-      } catch (err) { eW.textContent = "Network error. Try again."; eW.style.display = "block"; }
+      } catch (err) { eW.textContent = "Error de red. Inténtalo de nuevo."; eW.style.display = "block"; }
     });
   </script>
 </body>

@@ -75,6 +75,21 @@ function makeMemorySource(tenantId) {
   async function listWorkers() {
     return db.workers.map(w => ({ ...w }));
   }
+  // Bidirectional phone auto-sync: when a point is loaded before its worker exists, the
+  // unresolved phone reference is stored directly in point.workerId (see resolveWorker's
+  // fallback). Once that worker shows up, re-resolve any point still holding that phone.
+  async function relinkPointsForNewWorker(phone, workerId) {
+    if (!phone) return 0;
+    let n = 0;
+    for (const p of db.points) {
+      if (p.workerId && p.workerId !== workerId && phonesMatch(p.workerId, phone)) {
+        await updatePoint(p.row, { id: p.id, name: p.name, address: p.address, lat: p.lat, lng: p.lng, active: p.active, workerId });
+        n++;
+      }
+    }
+    return n;
+  }
+
   async function addWorker(f) {
     const w = {
       row: takeRow(),
@@ -85,6 +100,7 @@ function makeMemorySource(tenantId) {
       active: f.active !== false,
     };
     db.workers.push(w);
+    if (w.phone) await relinkPointsForNewWorker(w.phone, w.workerId);
     return { ...w };
   }
   async function updateWorker(row, f) {
@@ -106,7 +122,9 @@ function makeMemorySource(tenantId) {
     for (const r of rows) {
       const telegramId = str(r[0]).trim(), name = str(r[1]).trim(), phone = str(r[2]).trim();
       if (!telegramId && !name && !phone) continue;
-      db.workers.push({ row: takeRow(), workerId: newWorkerId(), telegramId, name, phone, active: true });
+      const workerId = newWorkerId();
+      db.workers.push({ row: takeRow(), workerId, telegramId, name, phone, active: true });
+      if (phone) await relinkPointsForNewWorker(phone, workerId);
       n++;
     }
     return n;

@@ -67,18 +67,36 @@ function makeSupabaseSource(tenant) {
       active: isActive(r.active),
     }));
   }
+  // Bidirectional phone auto-sync: when a point is loaded before its worker exists, the
+  // unresolved phone reference is stored directly in point.worker_id (see resolveWorker's
+  // fallback). Once that worker shows up, re-resolve any point still holding that phone.
+  async function relinkPointsForNewWorker(phone, workerId) {
+    if (!phone) return 0;
+    const points = await listPoints();
+    let n = 0;
+    for (const p of points) {
+      if (p.workerId && p.workerId !== workerId && phonesMatch(p.workerId, phone)) {
+        await updatePoint(p.row, { id: p.id, name: p.name, address: p.address, lat: p.lat, lng: p.lng, active: p.active, workerId });
+        n++;
+      }
+    }
+    return n;
+  }
+
   async function addWorker(f) {
     const workerId = str(f.workerId).trim() || newWorkerId();
+    const phone = str(f.phone).trim();
     const { error } = await db().from(T_WORKERS).insert({
       tenant_id: tenantId,
       worker_id: workerId,
       telegram_id: str(f.telegramId).trim(),
       name: str(f.name).trim(),
-      phone: str(f.phone).trim(),
+      phone,
       active: f.active !== false,
     });
     ok(error);
-    return { workerId, telegramId: str(f.telegramId).trim(), name: str(f.name).trim(), phone: str(f.phone).trim(), active: f.active !== false };
+    if (phone) await relinkPointsForNewWorker(phone, workerId);
+    return { workerId, telegramId: str(f.telegramId).trim(), name: str(f.name).trim(), phone, active: f.active !== false };
   }
   async function updateWorker(row, f) {
     const patch = {
@@ -110,6 +128,9 @@ function makeSupabaseSource(tenant) {
     if (!payload.length) return 0;
     const { error } = await db().from(T_WORKERS).insert(payload);
     ok(error);
+    for (const w of payload) {
+      if (w.phone) await relinkPointsForNewWorker(w.phone, w.worker_id);
+    }
     return payload.length;
   }
 

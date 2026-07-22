@@ -79,6 +79,24 @@ function mountPointRoutes(app) {
     try { await ds(req).deletePoint(row); res.json({ ok: true }); } catch (e) { fail(res, e); }
   });
 
+  // Delete several points in one call. Body: { ids: [<row>, ...] } (row numbers, same
+  // handle used everywhere else in this API — DELETE /:row, POST /assign).
+  r.post("/bulk-delete", requireRole("admin"), async (req, res) => {
+    const body = req.body || {};
+    const ids = Array.isArray(body.ids) ? body.ids : (Array.isArray(body.rows) ? body.rows : []);
+    if (!ids.length) return res.status(400).json({ error: "no_rows" });
+    try {
+      const source = ds(req);
+      let deleted = 0;
+      for (const id of ids) {
+        const row = parseInt(id, 10);
+        if (!(row >= 2)) continue;
+        deleted += (await source.deletePoint(row)) || 0;
+      }
+      res.json({ ok: true, deleted });
+    } catch (e) { fail(res, e); }
+  });
+
   app.use("/api/points", r);
 }
 

@@ -161,8 +161,9 @@ function mountConnectRoutes(app) {
       const keys = { pdfCompanyName: "pdf_company_name", pdfTaxId: "pdf_tax_id", pdfAddress: "pdf_address", pdfLogoUrl: "pdf_logo_url", pdfDocTitle: "pdf_doc_title", pdfFootnote: "pdf_footnote" };
       const pdfSettings = {};
       for (const f of Object.keys(keys)) pdfSettings[f] = String(await source.getSetting(keys[f], "") || "");
+      const lang = String(await source.getSetting("bot_lang", "es")) || "es";
       const base = (config.PLATFORM_URL || `${req.protocol}://${req.get("host")}`).replace(/\/+$/, "");
-      await renderVisitPdf(res, { visit, point, tenant, pdfSettings, source, baseUrl: base });
+      await renderVisitPdf(res, { visit, point, tenant, pdfSettings, source, baseUrl: base, lang });
     } catch (e) { fail(res, e); }
   });
 

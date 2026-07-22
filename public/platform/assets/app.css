@@ -157,6 +157,10 @@ a:hover { text-decoration: underline; }
 .pill.off { border-color: var(--border); color: var(--faint); }
 .pill::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
 
+/* Center a status badge inside its table cell (e.g. "Vinculado"/"Not linked" in Workers). */
+.table td.tcenter { text-align: center; }
+.table td.tcenter > * { display: inline-flex; justify-content: center; }
+
 /* ── Code blocks (API/import examples) ─────────────────────────────────── */
 .code-block {
   margin: 6px 0 0; padding: 12px 14px; border-radius: 10px;
@@ -230,6 +234,19 @@ a:hover { text-decoration: underline; }
 .view-head .lead { margin-top: 6px; font-size: 13px; }
 .toolbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .section-title { font-size: 12px; text-transform: uppercase; letter-spacing: 0.07em; color: var(--faint); margin: 28px 0 12px; display: flex; align-items: center; gap: 8px; }
+
+/* ── Worker PWA: assigned stops / recent check-ins as distinct cards ───────────
+   Deliberately NOT the glass/blur `.card` look: a flat surface with a hard 1px
+   border reads as a clean operational list on a phone screen. */
+.stop-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px; }
+.stop-card {
+  background: var(--bg-2); border: 1px solid var(--border); border-radius: 10px;
+  padding: 14px 16px; display: flex; flex-direction: column; gap: 8px;
+}
+.stop-card-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.stop-card-name { font-weight: 700; font-size: 14.5px; color: var(--strong); line-height: 1.35; }
+.stop-card-meta { font-family: var(--mono); font-size: 11.5px; color: var(--faint); }
+.stop-card-meta a { color: var(--dim); }
 
 /* ── Filter / search / bulk toolbars ─────────────────────────────────────── */
 .filterbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }

@@ -36,7 +36,11 @@
   function tableWrap(headers, bodyRows, stack) {
     var cls = "table" + (stack ? " stack" : "");
     return '<div class="table-wrap' + (stack ? " stack-wrap" : "") + '"><table class="' + cls + '"><thead><tr>' +
-      headers.map(function (h) { return "<th>" + esc(h) + "</th>"; }).join("") +
+      headers.map(function (h) {
+        // A header can be raw HTML (e.g. a "select all" checkbox) by passing { html }.
+        if (h && typeof h === "object" && h.html != null) return "<th>" + h.html + "</th>";
+        return "<th>" + esc(h) + "</th>";
+      }).join("") +
       "</tr></thead><tbody>" + bodyRows + "</tbody></table></div>";
   }
   function statusPill(on) { return on ? '<span class="pill on">activo</span>' : '<span class="pill off">inactivo</span>'; }
@@ -58,7 +62,8 @@
     workersQ: "",
     visitsQ: "", visitsFrom: "", visitsTo: "",
   };
-  var selectedPoints = {}; // row → true, for bulk assignment
+  var selectedPoints = {};  // row → true, for bulk assign/delete
+  var selectedWorkers = {}; // row → true, for bulk delete
   // Dashboard filters (apply to the charts + map, computed from the recent visits list).
   var dashFilters = { worker: "", source: "", from: "", to: "" };
   var lastRecent = [];
@@ -488,7 +493,10 @@
       var rows = state.points.filter(pointMatches);
       if (!rows.length) { wrap.innerHTML = '<div class="card card-pad"><div class="empty">Ningún punto coincide con el filtro.</div></div>'; updateBulkbar(); return; }
       var heads = [];
-      if (state.isAdmin) heads.push("");
+      if (state.isAdmin) {
+        var allPtsSel = rows.length > 0 && rows.every(function (p) { return selectedPoints[p.row]; });
+        heads.push({ html: '<input type="checkbox" class="row-check" id="points-select-all"' + (allPtsSel ? " checked" : "") + ">" });
+      }
       heads = heads.concat(["Nombre", "Dirección", "Trabajador", "Actividad", "Geo", "Lat", "Lng", "Estado"]);
       if (state.isAdmin) heads.push("Acciones");
       var stats = state.pointStats || {};
@@ -520,6 +528,17 @@
     try {
       var res = await api("/api/points/assign", { method: "POST", body: JSON.stringify({ rows: rows, workerId: workerId }) });
       toast(window.LF.tf(workerId ? "{n} puntos asignados" : "{n} puntos sin asignar", { n: res.updated || 0 }));
+      selectedPoints = {};
+      loadPoints();
+    } catch (e) { toast(e.message, true); }
+  }
+  async function bulkDeletePoints() {
+    var rows = Object.keys(selectedPoints).filter(function (r) { return selectedPoints[r]; }).map(Number);
+    if (!rows.length) { toast("Selecciona al menos un punto.", true); return; }
+    if (!confirm(window.LF.tf("¿Borrar {n} puntos seleccionados? Esta acción no se puede deshacer.", { n: rows.length }))) return;
+    try {
+      var res = await api("/api/points/bulk-delete", { method: "POST", body: JSON.stringify({ ids: rows }) });
+      toast(window.LF.tf("{n} puntos borrados", { n: res.deleted || 0 }));
       selectedPoints = {};
       loadPoints();
     } catch (e) { toast(e.message, true); }
@@ -634,7 +653,7 @@
       ]);
       var data = res[0], points = res[1].points || [], stats = res[2] || {};
       state.workers = data.workers;
-      if (!data.workers.length) { wrap.innerHTML = '<div class="card card-pad"><div class="empty">Aún no hay trabajadores. Añade uno o importa desde Excel.</div></div>'; return; }
+      if (!data.workers.length) { wrap.innerHTML = '<div class="card card-pad"><div class="empty">Aún no hay trabajadores. Añade uno o importa desde Excel.</div></div>'; updateWorkersBulkbar(); return; }
       var rows = data.workers.filter(workerMatches);
 
       // Per-worker aggregates.
@@ -643,7 +662,7 @@
       var covByWid = {}; (stats.coverage || []).forEach(function (c) { covByWid[c.workerId] = c; });
       renderWorkersKpis(data.workers, covByWid, assignedByWid);
 
-      if (!rows.length) { wrap.innerHTML = '<div class="card card-pad"><div class="empty">Ningún trabajador coincide con la búsqueda.</div></div>'; return; }
+      if (!rows.length) { wrap.innerHTML = '<div class="card card-pad"><div class="empty">Ningún trabajador coincide con la búsqueda.</div></div>'; updateWorkersBulkbar(); return; }
 
       var byWorker = stats.byWorker || {};
       var lastByKey = {};
@@ -653,7 +672,12 @@
         });
       });
 
-      var heads = ["Trabajador", "Vinculado", "Paradas (hoy)", "Check-ins", "Último check-in", "Estado"];
+      var heads = [];
+      if (state.isAdmin) {
+        var allWkSel = rows.length > 0 && rows.every(function (w) { return selectedWorkers[w.row]; });
+        heads.push({ html: '<input type="checkbox" class="row-check" id="workers-select-all"' + (allWkSel ? " checked" : "") + ">" });
+      }
+      heads = heads.concat(["Trabajador", "Vinculado", "Paradas (hoy)", "Check-ins", "Último check-in", "Estado"]);
       if (state.isAdmin) heads.push("Acciones");
       wrap.innerHTML = tableWrap(heads, rows.map(function (w) {
         var cov = covByWid[w.workerId];
@@ -671,8 +695,11 @@
         var linkedCell = w.telegramId
           ? '<span class="pill on" title="ID ' + esc(w.telegramId) + '">enlazado</span>'
           : '<span class="pill off" title="Aún no ha abierto el bot">sin vincular</span>';
-        return '<tr><td data-label="Trabajador">' + whoCell + '</td>' +
-          '<td data-label="Vinculado">' + linkedCell + '</td>' +
+        var wcheck = state.isAdmin
+          ? '<td data-label=""><input type="checkbox" class="row-check" data-check-worker="' + w.row + '"' + (selectedWorkers[w.row] ? " checked" : "") + "></td>"
+          : "";
+        return "<tr>" + wcheck + '<td data-label="Trabajador">' + whoCell + '</td>' +
+          '<td data-label="Vinculado" class="tcenter">' + linkedCell + '</td>' +
           '<td data-label="Paradas (hoy)" title="Paradas hechas hoy / asignadas">' + assignedCell + '</td>' +
           '<td data-label="Check-ins">' + total + '</td>' +
           '<td data-label="Último check-in" class="muted">' + lastCell + '</td>' +
@@ -680,6 +707,7 @@
           (state.isAdmin ? '<td data-label="Acciones"><div class="tbl-actions"><button class="btn ghost sm" data-edit-worker="' + w.row + '">Editar</button><button class="btn danger sm" data-del-worker="' + w.row + '">Borrar</button></div></td>' : "") +
           "</tr>";
       }).join(""), true);
+      updateWorkersBulkbar();
     } catch (e) { wrap.innerHTML = '<div class="card card-pad"><div class="empty">' + esc(e.message) + "</div></div>"; }
   }
   function editWorker(row) {
@@ -693,6 +721,25 @@
   async function delWorker(row) {
     if (!confirm(window.LF.t("¿Borrar este trabajador?"))) return;
     try { await api("/api/workers/" + row, { method: "DELETE" }); toast("Borrado"); loadWorkers(); } catch (e) { toast(e.message, true); }
+  }
+  function updateWorkersBulkbar() {
+    var bar = $("#workers-bulkbar");
+    if (!bar || !state.isAdmin) return;
+    var rows = Object.keys(selectedWorkers).filter(function (r) { return selectedWorkers[r]; });
+    bar.classList.toggle("hidden", rows.length === 0);
+    var cnt = $("#workers-bulk-count");
+    if (cnt) cnt.textContent = window.LF.tf(rows.length === 1 ? "{n} seleccionado" : "{n} seleccionados", { n: rows.length });
+  }
+  async function bulkDeleteWorkers() {
+    var rows = Object.keys(selectedWorkers).filter(function (r) { return selectedWorkers[r]; }).map(Number);
+    if (!rows.length) { toast("Selecciona al menos un trabajador.", true); return; }
+    if (!confirm(window.LF.tf("¿Borrar {n} trabajadores seleccionados? Esta acción no se puede deshacer.", { n: rows.length }))) return;
+    try {
+      var res = await api("/api/workers/bulk-delete", { method: "POST", body: JSON.stringify({ ids: rows }) });
+      toast(window.LF.tf("{n} trabajadores borrados", { n: res.deleted || 0 }));
+      selectedWorkers = {};
+      loadWorkers();
+    } catch (e) { toast(e.message, true); }
   }
 
   // ── Visits ───────────────────────────────────────────────────────────────────
@@ -1192,21 +1239,20 @@
 
   // ── Check-in (worker PWA) ──────────────────────────────────────────────────────
   var checkin = { lat: "", lng: "" };
-  // Own assigned points: a compact list with today's ✅ and the last time they were
-  // visited — the worker's whole route at a glance, not just the check-in dropdown.
+  // Own assigned points: distinct hard-bordered cards with today's status and the last
+  // time each was visited — the worker's whole route at a glance, not just the dropdown.
   function renderCheckinPoints(points) {
     var wrap = $("#ci-points-wrap");
     if (!wrap) return;
     if (!points.length) { wrap.innerHTML = '<div class="empty">Aún no tienes paradas asignadas.</div>'; return; }
     wrap.innerHTML = points.map(function (p) {
       var status = p.visitedToday
-        ? '<span class="pill on">hecho hoy</span>'
-        : '<span class="pill off">pendiente</span>';
+        ? '<span class="badge ok">hecho hoy</span>'
+        : '<span class="badge warn">pendiente</span>';
       var last = p.lastVisit ? window.LF.tf("Última visita: {t}", { t: fmtTime(p.lastVisit) }) : window.LF.t("Sin visitas todavía");
-      return '<div class="bl-row" style="flex-wrap:wrap">' +
-        '<span class="bl-name" style="flex:1 1 auto;white-space:normal">' + esc(p.name || p.address || p.id) + '</span>' +
-        status +
-        '<div class="muted" style="flex-basis:100%;margin-top:2px;font-size:12px">' + last + '</div></div>';
+      return '<div class="stop-card">' +
+        '<div class="stop-card-top"><span class="stop-card-name">' + esc(p.name || p.address || p.id) + '</span>' + status + '</div>' +
+        '<div class="stop-card-meta">' + last + '</div></div>';
     }).join("");
   }
   // Own recent check-ins: a small personal log (not the company-wide Visitas table).
@@ -1217,10 +1263,10 @@
     wrap.innerHTML = recent.map(function (v) {
       var photo = v.photoCount ? ("📸 " + v.photoCount) : "";
       var map = v.mapsLink ? '<a href="' + esc(v.mapsLink) + '" target="_blank" rel="noopener">mapa ↗</a>' : "";
-      return '<div class="bl-row" style="flex-wrap:wrap">' +
-        '<span class="bl-name" style="flex:1 1 auto;white-space:normal">' + esc(v.pointName || v.pointId) + '</span>' +
-        '<span class="muted">' + fmtTime(v.timestamp) + '</span>' +
-        '<div class="muted" style="flex-basis:100%;margin-top:2px;font-size:12px">' + [photo, map].filter(Boolean).join(" · ") + '</div></div>';
+      return '<div class="stop-card">' +
+        '<div class="stop-card-top"><span class="stop-card-name">' + esc(v.pointName || v.pointId) + '</span>' +
+        '<span class="stop-card-meta">' + fmtTime(v.timestamp) + '</span></div>' +
+        '<div class="stop-card-meta">' + [photo, map].filter(Boolean).join(" · ") + '</div></div>';
     }).join("");
   }
   async function loadCheckinStats() {
@@ -1357,6 +1403,10 @@
       : '<span class="dot dot-muted"></span> ' + window.LF.t("Opcional — el trabajador puede fichar sin foto.");
     var pht = $("#photo-toggle");
     if (pht) pht.innerHTML = '<svg class="ic"><use href="#i-power"/></svg> ' + (photoOn ? "Hacer opcional" : "Hacer obligatoria");
+
+    // Bot language (A.1) — which language the Telegram bot speaks to this company's workers.
+    var bls = $("#bot-lang-select");
+    if (bls) bls.value = (s && s.botLang) || "es";
 
     var connOn = !!(s && s.connectorEnabled);
     var key = (s && s.connectorKey) || "";
@@ -1500,6 +1550,14 @@
     } catch (e) { toast(e.message, true); }
     finally { btn.disabled = false; }
   }
+  async function changeBotLang() {
+    var sel = $("#bot-lang-select"); if (!sel) return;
+    try {
+      var next = await api("/api/settings", { method: "POST", body: JSON.stringify({ botLang: sel.value }) });
+      renderSettings(next);
+      toast("Idioma del bot actualizado");
+    } catch (e) { toast(e.message, true); }
+  }
 
   // ── Account (password change) ────────────────────────────────────────────────
   async function changePassword() {
@@ -1600,6 +1658,19 @@
     document.addEventListener("click", function (e) {
       var t = e.target;
       var cp = t.closest("[data-check-point]"); if (cp) { selectedPoints[cp.dataset.checkPoint] = cp.checked; updateBulkbar(); return; }
+      var cw = t.closest("[data-check-worker]"); if (cw) { selectedWorkers[cw.dataset.checkWorker] = cw.checked; updateWorkersBulkbar(); return; }
+      var psa = t.closest("#points-select-all");
+      if (psa) {
+        state.points.filter(pointMatches).forEach(function (p) { selectedPoints[p.row] = psa.checked; });
+        loadPointsFromState();
+        return;
+      }
+      var wsa = t.closest("#workers-select-all");
+      if (wsa) {
+        (state.workers || []).filter(workerMatches).forEach(function (w) { selectedWorkers[w.row] = wsa.checked; });
+        loadWorkers();
+        return;
+      }
       var th = t.closest(".thumb");             if (th) return openLightbox(th.dataset.full);
       var vd = t.closest("[data-visit-detail]"); if (vd) return openVisitDetail(vd.dataset.visitDetail);
       var ep = t.closest("[data-edit-point]");  if (ep) return editPoint(+ep.dataset.editPoint);
@@ -1657,12 +1728,16 @@
     var pWorker = $("#points-worker-filter");
     if (pWorker) pWorker.onchange = function () { filters.pointsWorker = this.value; loadPointsFromState(); };
     var bAssign = $("#points-bulk-assign"); if (bAssign) bAssign.onclick = bulkAssign;
+    var bDelPts = $("#points-bulk-delete"); if (bDelPts) bDelPts.onclick = bulkDeletePoints;
     var bClear = $("#points-bulk-clear");
     if (bClear) bClear.onclick = function () { selectedPoints = {}; loadPointsFromState(); };
 
-    // Workers: search.
+    // Workers: search + bulk delete.
     var wSearch = $("#workers-search");
     if (wSearch) wSearch.oninput = function () { filters.workersQ = this.value; loadWorkers(); };
+    var bDelWk = $("#workers-bulk-delete"); if (bDelWk) bDelWk.onclick = bulkDeleteWorkers;
+    var wClear = $("#workers-bulk-clear");
+    if (wClear) wClear.onclick = function () { selectedWorkers = {}; loadWorkers(); };
 
     // Visits: search + date range (re-render from cached state.visits, no refetch).
     var vSearch = $("#visits-search");
@@ -1717,6 +1792,7 @@
     // Settings (PWA toggle + connector key)
     var pwaBtn = $("#pwa-toggle"); if (pwaBtn) pwaBtn.onclick = togglePwa;
     var photoBtn = $("#photo-toggle"); if (photoBtn) photoBtn.onclick = togglePhoto;
+    var botLangSel = $("#bot-lang-select"); if (botLangSel) botLangSel.onchange = changeBotLang;
     var genBtn = $("#conn-key-gen"); if (genBtn) genBtn.onclick = generateConnectorKey;
     var cpyBtn = $("#conn-key-copy"); if (cpyBtn) cpyBtn.onclick = copyConnectorKey;
     var pwSaveBtn = $("#acct-pw-save"); if (pwSaveBtn) pwSaveBtn.onclick = changePassword;

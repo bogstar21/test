@@ -101,6 +101,31 @@ function mountWorkerRoutes(app) {
     } catch (e) { fail(res, e); }
   });
 
+  // Delete several workers in one call. Body: { ids: [<row>, ...] } (row numbers, same
+  // handle used everywhere else in this API). Unassigns their points just like the
+  // single-delete route, so nothing is left pointing at a worker that no longer exists.
+  r.post("/bulk-delete", requireRole("admin"), async (req, res) => {
+    const body = req.body || {};
+    const ids = Array.isArray(body.ids) ? body.ids : (Array.isArray(body.rows) ? body.rows : []);
+    if (!ids.length) return res.status(400).json({ error: "no_rows" });
+    try {
+      const source = ds(req);
+      const all = await source.listWorkers();
+      let deleted = 0, unassigned = 0;
+      for (const id of ids) {
+        const row = parseInt(id, 10);
+        if (!(row >= 2)) continue;
+        const worker = all.find(w => String(w.row) === String(row));
+        const n = await source.deleteWorker(row);
+        if (n) {
+          deleted += n;
+          if (worker && worker.workerId) unassigned += await source.unassignPointsForWorker(worker.workerId);
+        }
+      }
+      res.json({ ok: true, deleted, unassigned });
+    } catch (e) { fail(res, e); }
+  });
+
   app.use("/api/workers", r);
 }
 
