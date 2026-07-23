@@ -103,13 +103,75 @@ Newest first. One line per shipped item.
 
 ---
 
-## 3. Active Sprint (In Progress)
+## 3. Active Sprint — 2-Week Launch Plan (target: 2026-08-06)
 
-Nothing is actively in flight right now — the last batch (PDF/commentary/design refresh +
-the bot-language round-trip) shipped and merged clean. Pull the next item from Backlog
-below when starting new work, and move it here first.
+Everything below is pre-launch, in priority order. **Functional Essentials first** (they're
+infrastructure/trust fixes that get harder to retrofit after real customer data exists),
+then **Strategic Essentials** (sales/trust surface) in week 2, finishing with a hard QA pass
+before flipping the switch. Check items off as they ship; move each one to Completed
+History (§2) with a one-line note, don't just delete the checkbox.
 
-- [ ] *(empty — populate when a task starts)*
+### Week 1 (Jul 23 – Jul 29) — Functional Essentials
+
+**A. Offload photo storage (critical infra fix)**
+- [ ] Current state: PWA check-in photos already go to a **Supabase Storage** bucket
+  (`datasource/supabase.js: uploadPhoto`/`getPhoto`) — that half is done. **Bot** check-in
+  photos are still Telegram `file_id`s, resolved live on every view/PDF-embed via
+  `bot/manager.fileLink()` + a server-side fetch/stream (`routes/visits.js`,
+  `routes/connect.js`, `pdf.js`). That's the RAM/bandwidth risk under concurrent load.
+- [ ] Fix: when the bot finalizes a visit (`bot/handlers.js`, `finalizeVisit`), download
+  each photo from Telegram **once** and push it into the same Supabase Storage bucket via
+  the existing `uploadPhoto()`; store the storage ref instead of the raw `file_id`.
+- [ ] Keep the current Telegram-proxy path as a fallback for visits written before this
+  change (don't break old data) — new writes just stop taking that path.
+- [ ] Update the photo-proxy routes (`visits.js`, `connect.js`) and `pdf.js`'s
+  `fetchPhotoBuffer()` to check the ref type and read from Storage first.
+
+**B. Backup & recovery**
+- [ ] Verify Supabase automated daily backups are enabled on the production project
+  (Dashboard → Database → Backups). This is an ops/config checklist item, not code.
+- [ ] Do one manual test restore (or at least confirm a restore point exists and is recent)
+  so "restore in minutes" is a tested claim, not an assumption.
+
+**C. Custom domain & SSL**
+- [ ] Point a real domain (e.g. `app.starx.com` / `starx.app`) at the Railway deployment
+  through Cloudflare, with SSL active — replace the raw `*.railway.app` URL everywhere
+  it's hardcoded (`PLATFORM_URL` env var, any absolute links in emails/PDFs).
+- [ ] Re-check cookie settings (`COOKIE_SECURE=true`) and CORS/Origin checks still make
+  sense under the new domain.
+
+### Week 2 (Jul 30 – Aug 5) — Strategic Essentials
+
+**A. Legal & Terms pages**
+- [ ] Terms of Service + Privacy Policy already exist (`/terms`, `/privacy`) and are linked
+  from `signup.html`'s required checkbox — confirm both are still reachable after the
+  domain change (item 1C) and read cleanly on mobile.
+- [ ] Add explicit GDPR-relevant language to the Privacy Policy: that check-ins capture
+  **GPS location at time of check-in only** (not continuous tracking) and **photos**, how
+  long both are retained, and that they're stored in Supabase (EU region if applicable) —
+  this matters specifically for European clients.
+
+**B. Stripe production-mode verification**
+- [ ] Switch the Stripe keys from test (`sk_test_…`) to live (`sk_live_…`) and the webhook
+  endpoint/secret to the live one, in the Railway env.
+- [ ] Run one real €1/$1 checkout end to end with a real card and confirm, without any
+  manual DB edit: (1) Checkout opens cleanly, (2) the `checkout.session.completed` webhook
+  fires and is received, (3) the tenant's `plan`/`subscriptionStatus` flips in Supabase
+  automatically (`routes/billing.js` webhook handler).
+- [ ] Refund/cancel that test charge afterward.
+
+**C. A 60-second "how it works" demo**
+- [ ] Record (or GIF) the 3-step loop: add a point on the dashboard → a worker taps
+  check-in on Telegram or the PWA → the manager downloads the Albarán PDF instantly.
+- [ ] Embed it on `landing.html` near the hero — managers evaluating field-ops tools want
+  30 seconds of proof over a paragraph of docs.
+
+### Final QA + Launch (Aug 5–6)
+- [ ] Full end-to-end pass on the **live** domain with **live** Stripe: signup → login →
+  import → assign → bot check-in → PWA check-in → dashboard/stats → Albarán PDF → export.
+- [ ] Confirm no `*.railway.app` links leak anywhere a customer would see them (emails,
+  PDFs, the connector's `PLATFORM_URL`).
+- [ ] Ship it.
 
 ---
 
@@ -167,7 +229,6 @@ below when starting new work, and move it here first.
   re-deriving the design system each time from the CSS file directly.
 
 ### Trust / Ops
-- [ ] Confirm Supabase automated backups are on (an ops checklist item, not code).
 - [ ] Re-enable per-tenant bot language if a real customer asks for it — the `bot/i18n.js`
   dictionary and resolution logic already exist and were deliberately kept after being
   simplified out of the live flow (see Completed History).
